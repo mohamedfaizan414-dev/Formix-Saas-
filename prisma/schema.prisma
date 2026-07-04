@@ -1,0 +1,278 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum RoleName {
+  SUPER_ADMIN
+  HOSPITAL_ADMIN
+  DOCTOR
+  NURSE
+  RECEPTIONIST
+}
+
+enum FormStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  AMENDED
+}
+
+// ---------- Tenancy ----------
+
+model Hospital {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  isActive    Boolean  @default(true)
+  address     String?
+  phone       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  departments Department[]
+  users       User[]
+  forms       Form[]
+  templates   Template[]
+  submissions Submission[]
+  auditLogs   AuditLog[]
+
+  @@map("hospitals")
+}
+
+model Department {
+  id         String   @id @default(cuid())
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  name       String
+  createdAt  DateTime @default(now())
+
+  forms Form[]
+  users User[]
+
+  @@unique([hospitalId, name])
+  @@map("departments")
+}
+
+// ---------- Identity / RBAC ----------
+
+model Role {
+  id          String       @id @default(cuid())
+  name        RoleName     @unique
+  description String?
+  permissions Permission[]  @relation("RolePermissions")
+  users       User[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id     String @id @default(cuid())
+  key    String @unique // e.g. "form:create", "submission:view"
+  label  String
+  roles  Role[] @relation("RolePermissions")
+
+  @@map("permissions")
+}
+
+model User {
+  id            String      @id @default(cuid())
+  email         String      @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  isActive      Boolean     @default(true)
+  mfaEnabled    Boolean     @default(false)
+  mfaSecret     String?
+  hospitalId    String?
+  hospital      Hospital?   @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  departmentId  String?
+  department    Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  roleId        String
+  role          Role        @relation(fields: [roleId], references: [id])
+  deletedAt     DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  createdForms      Form[]        @relation("FormCreatedBy")
+  createdVersions    FormVersion[] @relation("VersionCreatedBy")
+  submissions        Submission[]  @relation("SubmittedBy")
+  auditLogs          AuditLog[]
+  refreshTokens      RefreshToken[]
+  uploadedFiles       FileAsset[]
+  notifications       Notification[]
+
+  @@index([hospitalId])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+// ---------- Forms ----------
+
+model Form {
+  id            String     @id @default(cuid())
+  hospitalId    String
+  hospital      Hospital   @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  departmentId  String?
+  department    Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  name          String
+  slug          String
+  description   String?
+  category      String?
+  status        FormStatus @default(DRAFT)
+  currentVersion Int       @default(1)
+  createdById   String
+  createdBy     User       @relation("FormCreatedBy", fields: [createdById], references: [id])
+  deletedAt     DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  versions    FormVersion[]
+  submissions Submission[]
+
+  @@unique([hospitalId, slug])
+  @@index([hospitalId, status])
+  @@map("forms")
+}
+
+// Every publish/edit creates an immutable version. Submissions link to the
+// exact version they were filled against so historical data never drifts.
+model FormVersion {
+  id           String    @id @default(cuid())
+  formId       String
+  form         Form      @relation(fields: [formId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  schema       Json      // full JSON schema: sections, components, layout, rules
+  changelog    String?
+  isPublished  Boolean   @default(false)
+  publishedAt  DateTime?
+  createdById  String
+  createdBy    User      @relation("VersionCreatedBy", fields: [createdById], references: [id])
+  createdAt    DateTime  @default(now())
+
+  submissions Submission[]
+
+  @@unique([formId, versionNumber])
+  @@map("form_versions")
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  hospitalId  String?  // null = global/system template
+  hospital    Hospital? @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  name        String
+  category    String
+  description String?
+  schema      Json
+  thumbnail   String?
+  createdAt   DateTime @default(now())
+
+  @@map("templates")
+}
+
+// ---------- Submissions ----------
+
+model Submission {
+  id            String            @id @default(cuid())
+  formId        String
+  form          Form              @relation(fields: [formId], references: [id], onDelete: Cascade)
+  formVersionId String
+  formVersion   FormVersion       @relation(fields: [formVersionId], references: [id])
+  hospitalId    String
+  hospital      Hospital          @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  patientId     String?
+  encounterId   String?
+  status        SubmissionStatus  @default(DRAFT)
+  data          Json              // field values keyed by component internal name
+  submittedById String
+  submittedBy   User              @relation("SubmittedBy", fields: [submittedById], references: [id])
+  submittedAt   DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  history SubmissionVersion[]
+
+  @@index([hospitalId, formId])
+  @@index([patientId])
+  @@map("submissions")
+}
+
+model SubmissionVersion {
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  data         Json
+  editedById   String
+  createdAt    DateTime   @default(now())
+
+  @@map("submission_versions")
+}
+
+// ---------- Files ----------
+
+model FileAsset {
+  id           String   @id @default(cuid())
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  url          String
+  publicId     String   // cloudinary public_id
+  resourceType String   // image | raw | signature
+  originalName String?
+  bytes        Int?
+  createdAt    DateTime @default(now())
+
+  @@map("files")
+}
+
+// ---------- Audit & Notifications ----------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  hospitalId String?
+  hospital   Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String   // e.g. "form.created", "form.published", "submission.updated"
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([hospitalId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}

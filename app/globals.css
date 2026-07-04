@@ -1,0 +1,76 @@
+/* app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  --chart-line: #d9e0dc;
+}
+
+.dark {
+  --chart-line: #233238;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-paper text-ink font-body antialiased text-sm sm:text-base;
+}
+
+.dark body {
+  @apply bg-paper-dark text-[#DCE7E4];
+}
+
+::selection {
+  background: #4f7c6e33;
+}
+
+/* Chart-paper texture used behind the builder canvas and hero */
+.chart-paper {
+  background-color: var(--tw-bg-opacity, transparent);
+  background-image:
+    linear-gradient(var(--chart-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--chart-line) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+@media (min-width: 640px) {
+  .chart-paper {
+    background-size: 28px 28px;
+  }
+}
+
+.stamp {
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Focus visibility kept intentional and visible everywhere */
+:focus-visible {
+  outline: 2px solid #4f7c6e;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Thin custom scrollbar for builder panels */
+.thin-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+@media (min-width: 640px) {
+  .thin-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+}
+.thin-scroll::-webkit-scrollbar-thumb { background: #C9D2CE; border-radius: 8px; }
+.dark .thin-scroll::-webkit-scrollbar-thumb { background: #233238; }
+.thin-scroll::-webkit-scrollbar-track { background: transparent; }
