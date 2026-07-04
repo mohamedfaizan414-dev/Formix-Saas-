@@ -1,14 +1,15 @@
+// lib/form-engine/build-zod-schema.ts
 import { z, ZodTypeAny } from "zod";
 import type { FormComponentNode, FormSchema } from "./types";
 import { isLayoutType } from "./field-registry";
 
 function fieldToZod(node: FormComponentNode): ZodTypeAny | null {
-  if (isLayoutType(node.type) || node.type === "action" || ["heading", "paragraph", "label", "divider", "htmlBlock", "imageDisplay", "spacer", "submit", "reset", "cancel", "previous", "next"].includes(node.type)) {
+  // 🌟 FIXED: Removed 'node.type === "action"' to resolve the non-overlapping type compiler block
+  if (isLayoutType(node.type) || ["heading", "paragraph", "label", "divider", "htmlBlock", "imageDisplay", "spacer", "submit", "reset", "cancel", "previous", "next"].includes(node.type)) {
     return null; // non-data-bearing nodes
   }
 
   let schema: ZodTypeAny;
-
   switch (node.type) {
     case "number":
     case "rating":
@@ -55,8 +56,8 @@ function fieldToZod(node: FormComponentNode): ZodTypeAny | null {
   return schema;
 }
 
-// Builds a Zod object schema from the *currently visible* fields only —
-// caller should pass the runtime-visible node list so hidden/disabled
+// Builds a Zod object schema from the *currently visible* fields only  
+// caller should pass the runtime-visible node list so hidden/disabled 
 // conditional fields don't block submission.
 export function buildZodSchemaForNodes(nodes: FormComponentNode[]) {
   const shape: Record<string, ZodTypeAny> = {};
