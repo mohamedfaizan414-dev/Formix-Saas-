@@ -53,9 +53,10 @@ export default async function SubmissionViewPage({ params }: { params: Promise<{
         </div>
 
    {/* We use mode="view" to trigger the Clinical EHR Chart style */}
-        <div className="rounded-md border border-ink/10 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-paper-darkdim">
-          <DynamicFormRenderer schema={schema} initialValues={data} mode="view" />
-        </div>
+       {/* 🌟 FIXED: Swapped 'view' to 'preview' to match the allowed types */}
+<div className="rounded-md border border-ink/10 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-paper-darkdim">
+  <DynamicFormRenderer schema={schema} initialValues={data} mode="preview" />
+</div>
       </div>
     </AppShell>
   );
