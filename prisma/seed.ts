@@ -1,3 +1,4 @@
+// prisma/seed.ts
 import { PrismaClient, RoleName } from "@prisma/client";
 import { hashPassword } from "../lib/auth/jwt";
 import { nanoid } from "nanoid";
@@ -118,6 +119,21 @@ async function main() {
       versions: {
         create: { versionNumber: 1, schema: schema as any, isPublished: true, publishedAt: new Date(), createdById: hospitalAdmin.id },
       },
+    },
+  });
+
+  // 🌟 ESSENTIAL ADDITION: Seed the anonymous public link user anchor safely here
+  console.log("Seeding anonymous public form user account…");
+  await prisma.user.upsert({
+    where: { id: "anonymous-public-user" },
+    update: {},
+    create: {
+      id: "anonymous-public-user",
+      email: "anonymous-public-submitter@hospital.org",
+      firstName: "Public",
+      lastName: "Submitter",
+      passwordHash: "N/A_EXTERNAL_LINK_USER",
+      roleId: (await prisma.role.findUnique({ where: { name: "RECEPTIONIST" } }))!.id,
     },
   });
 

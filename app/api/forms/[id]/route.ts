@@ -1,3 +1,4 @@
+// app/api/forms/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth/session";
@@ -15,8 +16,29 @@ async function assertTenantAccess(formId: string, session: { role: string; hospi
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
 
+  // 🌟 FIXED: Allow public unauthenticated users to read the schema details IF the form is live
+  if (!session) {
+    const form = await prisma.form.findUnique({ where: { id, deletedAt: null } });
+    if (!form || form.status !== "PUBLISHED") {
+      return NextResponse.json({ error: "Form not found or unavailable." }, { status: 404 });
+    }
+
+    const versions = await prisma.formVersion.findMany({
+      where: { formId: id },
+      orderBy: { versionNumber: "desc" },
+      take: 1, // Only stream the active production copy
+    });
+
+    return NextResponse.json({ 
+      form, 
+      versions, 
+      latestSchema: versions[0]?.schema ?? null,
+      hasSession: false // Explicitly tell frontend they are an anonymous guest
+    });
+  }
+
+  // --- INTERNAL AUTHENTICATED USERS FLOW (UNTOUCHED) ---
   const { form, allowed } = await assertTenantAccess(id, session);
   if (!form) return NextResponse.json({ error: "Form not found" }, { status: 404 });
   if (!allowed) return NextResponse.json({ error: "Not authorized for this hospital's data." }, { status: 403 });
@@ -26,10 +48,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     orderBy: { versionNumber: "desc" },
   });
 
-  return NextResponse.json({ form, versions, latestSchema: versions[0]?.schema ?? null });
+  return NextResponse.json({ 
+    form, 
+    versions, 
+    latestSchema: versions[0]?.schema ?? null,
+    hasSession: true,
+    user: session
+  });
 }
 
-// PUT — saves a NEW immutable version. Never mutates a published version's schema in place.
+// PUT — saves a NEW immutable version (UNTOUCHED)
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getSession();
@@ -84,6 +112,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json({ version });
 }
 
+// DELETE — removes a form template entry (UNTOUCHED)
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getSession();
