@@ -22,33 +22,33 @@ export function BuilderCanvas() {
 
   return (
     <div className="thin-scroll flex h-full flex-1 flex-col overflow-y-auto bg-paper-dim dark:bg-paper-dark">
-      <div className="flex items-center gap-2 overflow-x-auto border-b border-ink/10 bg-white px-4 py-2 dark:border-white/10 dark:bg-paper-darkdim">
-        {schema.sections.map((s) => (
-          <div key={s.id} className={cn("group flex shrink-0 items-center gap-1 rounded-full border px-3 py-1", s.id === activeSectionId ? "border-clinical-teal bg-clinical-teal/10" : "border-ink/10")}>
-            <input
-              value={s.title}
-              onChange={(e) => renameSection(s.id, e.target.value)}
-              onClick={() => setActiveSectionId(s.id)}
-              className="w-28 bg-transparent text-xs font-medium outline-none"
-            />
-            {schema.sections.length > 1 && (
-              <button onClick={() => removeSection(s.id)} className="opacity-0 group-hover:opacity-100">
-                <Trash2 className="h-3 w-3 text-clinical-brick" />
-              </button>
-            )}
-          </div>
-        ))}
-        <button onClick={addSection} className="flex shrink-0 items-center gap-1 rounded-full border border-dashed border-ink/20 px-3 py-1 text-xs text-ink-soft hover:border-clinical-sage hover:text-clinical-teal">
-          <Plus className="h-3 w-3" /> Section
+      <div className="flex items-center gap-2 overflow-x-auto border-b border-ink/10 bg-white px-4 py-3 dark:border-white/10 dark:bg-paper-darkdim">
+  {schema.sections.map((s) => (
+    <div key={s.id} className={cn("group flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 transition-colors duration-200 ease-out", s.id === activeSectionId ? "border-clinical-teal bg-clinical-teal/10" : "border-ink/10")}>
+      <input
+        value={s.title}
+        onChange={(e) => renameSection(s.id, e.target.value)}
+        onClick={() => setActiveSectionId(s.id)}
+        className="w-28 bg-transparent text-xs font-medium outline-none"
+      />
+      {schema.sections.length > 1 && (
+        <button onClick={() => removeSection(s.id)} className="opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+          <Trash2 className="h-3 w-3 text-clinical-brick" />
         </button>
-      </div>
+      )}
+    </div>
+  ))}
+  <button onClick={addSection} className="flex shrink-0 items-center gap-1 rounded-full border border-dashed border-ink/20 px-3.5 py-1.5 text-xs text-ink-soft transition-colors duration-150 hover:border-clinical-sage hover:text-clinical-teal">
+    <Plus className="h-3 w-3" /> Section
+  </button>
+</div>
 
       <div
         ref={setNodeRef}
         onClick={() => select(null)}
       className={cn(
-  "chart-paper mx-auto my-4 w-full max-w-3xl flex-1 space-y-4 rounded-md border-2 border-dashed p-4 transition-colors md:my-8 md:p-6",
-  isOver ? "border-clinical-sage bg-clinical-sagelight/20" : "border-ink/10 dark:border-white/10"
+  "chart-paper mx-auto my-4 w-full max-w-3xl flex-1 origin-center space-y-4 rounded-md border-2 border-dashed p-4 transition-all duration-300 ease-out transform-gpu md:my-8 md:p-6",
+  isOver ? "scale-[1.004] border-clinical-sage bg-clinical-sagelight/20" : "scale-100 border-ink/10 dark:border-white/10"
 )}
       >
         <SortableContext items={activeSection.components.map((c) => c.id)} strategy={verticalListSortingStrategy}>

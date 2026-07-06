@@ -21,6 +21,7 @@ export function BuilderToolbar({ formId, status }: { formId: string; status: str
   const future = useBuilderStore((s) => s.future);
   const setSchema = useBuilderStore((s) => s.setSchema);
   const [saving, setSaving] = React.useState(false);
+  const [previewing, setPreviewing] = React.useState(false);
   const [title, setTitle] = React.useState(schema.title);
 
   React.useEffect(() => setTitle(schema.title), [schema.title]);
@@ -62,28 +63,55 @@ export function BuilderToolbar({ formId, status }: { formId: string; status: str
       setSaving(false);
     }
   }
-return (
-  <div className="flex flex-col gap-2 border-b border-ink/10 bg-white px-4 py-2.5 dark:border-white/10 dark:bg-paper-darkdim md:flex-row md:items-center md:justify-between md:gap-0">
-    <div className="flex items-center gap-3">
-      <Link href="/forms"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        className="w-full min-w-0 flex-1 bg-transparent font-display text-sm font-semibold outline-none md:w-56 md:flex-none"
-      />
-      <Badge tone={status === "PUBLISHED" ? "sage" : "amber"}>{status}</Badge>
-    </div>
 
-    <div className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 md:mx-0 md:px-0">
-      <Button variant="ghost" size="icon" onClick={undo} disabled={!history.length} title="Undo" className="shrink-0"><Undo2 className="h-4 w-4" /></Button>
-      <Button variant="ghost" size="icon" onClick={redo} disabled={!future.length} title="Redo" className="shrink-0"><Redo2 className="h-4 w-4" /></Button>
-      <div className="mx-1.5 h-5 w-px shrink-0 bg-ink/10 dark:bg-white/10" />
-      <div className="shrink-0"><ConditionalLogicButton /></div>
-      <div className="shrink-0"><AiGenerateButton /></div>
-      <Link href={`/forms/${formId}/versions`} className="shrink-0"><Button variant="ghost" size="sm"><History className="h-3.5 w-3.5" /> Versions</Button></Link>
-      <Link href={`/forms/${formId}/preview`} target="_blank" className="shrink-0"><Button variant="outline" size="sm"><Eye className="h-3.5 w-3.5" /> Preview</Button></Link>
-      <Button variant="outline" size="sm" onClick={() => save(false)} disabled={saving} className="shrink-0"><Save className="h-3.5 w-3.5" /> Save draft</Button>
-      <Button size="sm" onClick={() => save(true)} disabled={saving} className="shrink-0"><Rocket className="h-3.5 w-3.5" /> Publish</Button>
+  async function handlePreview() {
+    setPreviewing(true);
+    try {
+      const nextSchema = { ...schema, title };
+      const res = await fetch(`/api/forms/${formId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ schema: nextSchema, name: title, changelog: "Preview snapshot" }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        toast.error(d.error ?? "Couldn't prepare preview");
+        return;
+      }
+      setSchema(nextSchema);
+      window.open(`/forms/${formId}/preview`, "_blank");
+    } catch {
+      toast.error("Network error while preparing preview.");
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between border-b border-ink/10 bg-white px-4 py-2.5 dark:border-white/10 dark:bg-paper-darkdim">
+      <div className="flex items-center gap-3">
+        <Link href="/forms"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="w-56 bg-transparent font-display text-sm font-semibold outline-none"
+        />
+        <Badge tone={status === "PUBLISHED" ? "sage" : "amber"}>{status}</Badge>
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        <Button variant="ghost" size="icon" onClick={undo} disabled={!history.length} title="Undo"><Undo2 className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="icon" onClick={redo} disabled={!future.length} title="Redo"><Redo2 className="h-4 w-4" /></Button>
+        <div className="mx-1.5 h-5 w-px bg-ink/10 dark:bg-white/10" />
+        <ConditionalLogicButton />
+        <AiGenerateButton />
+        <Link href={`/forms/${formId}/versions`}><Button variant="ghost" size="sm"><History className="h-3.5 w-3.5" /> Versions</Button></Link>
+        <Button variant="outline" size="sm" onClick={handlePreview} disabled={previewing}>
+          <Eye className="h-3.5 w-3.5" /> {previewing ? "Preparing…" : "Preview"}
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => save(false)} disabled={saving}><Save className="h-3.5 w-3.5" /> Save draft</Button>
+        <Button size="sm" onClick={() => save(true)} disabled={saving}><Rocket className="h-3.5 w-3.5" /> Publish</Button>
+      </div>
     </div>
-  </div>
-);}
+  );
+}

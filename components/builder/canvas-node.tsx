@@ -20,13 +20,13 @@ function ChildNode({ node, sectionId }: { node: FormComponentNode; sectionId: st
     <div
       onClick={(e) => { e.stopPropagation(); select(node.id); }}
       className={cn(
-        "group/child relative cursor-pointer rounded-xs border border-dashed border-ink/15 p-2 transition-colors",
+        "group/child relative cursor-pointer rounded-xs border border-dashed border-ink/15 p-2 transition-colors duration-200 ease-out",
         isSelected && "border-solid border-clinical-brick bg-clinical-bricklight/20"
       )}
     >
       <button
         onClick={(e) => { e.stopPropagation(); removeComponent(node.id); }}
-        className="absolute right-1 top-1 rounded p-0.5 opacity-0 hover:bg-clinical-brick/10 group-hover/child:opacity-100"
+        className="absolute right-1 top-1 rounded p-0.5 opacity-0 transition-opacity duration-150 hover:bg-clinical-brick/10 group-hover/child:opacity-100"
       >
         <Trash2 className="h-3 w-3 text-clinical-brick" />
       </button>
@@ -53,7 +53,13 @@ function LayoutBody({ node, sectionId, nested }: { node: FormComponentNode; sect
 }
 
 export function CanvasNode({ node, sectionId }: { node: FormComponentNode; sectionId: string }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: node.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: node.id,
+    transition: {
+      duration: 250,
+      easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+    },
+  });
   const selectedId = useBuilderStore((s) => s.selectedId);
   const select = useBuilderStore((s) => s.select);
   const removeComponent = useBuilderStore((s) => s.removeComponent);
@@ -62,36 +68,48 @@ export function CanvasNode({ node, sectionId }: { node: FormComponentNode; secti
 
   const isSelected = selectedId === node.id;
 
-  const style = { transform: CSS.Transform.toString(transform), transition };
+  // Positional transform only — must stay instantaneous while dragging so it
+  // tracks the pointer 1:1. Easing lives on the drop/settle transition dnd-kit
+  // provides, not here.
+  const positionStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    willChange: "transform",
+  };
 
- return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      onClick={(e) => { e.stopPropagation(); select(node.id); }} 
-      className={cn(
-        "group relative rounded-md border bg-white p-4 transition-shadow dark:bg-paper-darkdim",
-        isSelected ? "border-clinical-brick shadow-[0_0_0_2px_rgba(178,76,50,0.15)]" : "border-ink/10 hover:border-ink/20 dark:border-white/10",
-        isDragging && "opacity-50"
-      )}
-    >
-      <div className="absolute -left-3 top-1/2 hidden -translate-y-1/2 md:block">
-        <button {...attributes} {...listeners} className="cursor-grab rounded bg-ink/5 p-1 text-ink/40 hover:text-ink active:cursor-grabbing dark:bg-white/5">
-          <GripVertical className="h-4 w-4" />
-        </button>
+  return (
+    <div ref={setNodeRef} style={positionStyle} className="transform-gpu">
+      {/* Inner layer owns the "lift" (scale/shadow) feedback with its own
+          eased transition, fully decoupled from the drag-tracking transform
+          above so the two never fight or snap. */}
+      <div
+        onClick={(e) => { e.stopPropagation(); select(node.id); }}
+        className={cn(
+          "group relative origin-center rounded-md border bg-white p-4 transition-all duration-200 ease-out transform-gpu dark:bg-paper-darkdim",
+          isSelected ? "border-clinical-brick shadow-[0_0_0_2px_rgba(178,76,50,0.15)]" : "border-ink/10 hover:border-ink/20 dark:border-white/10",
+          isDragging
+            ? "scale-[1.025] cursor-grabbing opacity-95 shadow-2xl shadow-black/20"
+            : "scale-100 shadow-none"
+        )}
+      >
+        <div className="absolute -left-3 top-1/2 hidden -translate-y-1/2 md:block">
+          <button {...attributes} {...listeners} className="cursor-grab rounded bg-ink/5 p-1 text-ink/40 transition-colors duration-150 hover:text-ink active:cursor-grabbing dark:bg-white/5">
+            <GripVertical className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+          <button onClick={(e) => { e.stopPropagation(); copyComponent(node.id); }} title="Copy" className="rounded p-1 transition-colors duration-150 hover:bg-ink/5 dark:hover:bg-white/10"><ClipboardCopy className="h-3.5 w-3.5 text-ink-soft" /></button>
+          <button onClick={(e) => { e.stopPropagation(); duplicateComponent(node.id); }} title="Duplicate" className="rounded p-1 transition-colors duration-150 hover:bg-ink/5 dark:hover:bg-white/10"><Copy className="h-3.5 w-3.5 text-ink-soft" /></button>
+          <button onClick={(e) => { e.stopPropagation(); removeComponent(node.id); }} title="Delete" className="rounded p-1 transition-colors duration-150 hover:bg-clinical-brick/10"><Trash2 className="h-3.5 w-3.5 text-clinical-brick" /></button>
+        </div>
+
+        {isLayoutType(node.type) ? (
+          <LayoutBody node={node} sectionId={sectionId} />
+        ) : (
+          <FieldRenderer node={node} value={undefined} onChange={() => {}} interactive={false} />
+        )}
       </div>
-
-      <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <button onClick={(e) => { e.stopPropagation(); copyComponent(node.id); }} title="Copy" className="rounded p-1 hover:bg-ink/5 dark:hover:bg-white/10"><ClipboardCopy className="h-3.5 w-3.5 text-ink-soft" /></button>
-        <button onClick={(e) => { e.stopPropagation(); duplicateComponent(node.id); }} title="Duplicate" className="rounded p-1 hover:bg-ink/5 dark:hover:bg-white/10"><Copy className="h-3.5 w-3.5 text-ink-soft" /></button>
-        <button onClick={(e) => { e.stopPropagation(); removeComponent(node.id); }} title="Delete" className="rounded p-1 hover:bg-clinical-brick/10"><Trash2 className="h-3.5 w-3.5 text-clinical-brick" /></button>
-      </div>
-
-      {isLayoutType(node.type) ? (
-        <LayoutBody node={node} sectionId={sectionId} />
-      ) : (
-        <FieldRenderer node={node} value={undefined} onChange={() => {}} interactive={false} />
-      )}
     </div>
   );
 }

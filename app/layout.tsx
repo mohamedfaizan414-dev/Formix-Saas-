@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Space_Grotesk, Inter, IBM_Plex_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
+// app/layout.tsx
+import NextTopLoader from "nextjs-toploader";
+
 
 const display = Space_Grotesk({
   subsets: ["latin"],
@@ -23,11 +26,22 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
+    <html lang="en">
       <body>
+        {/* 🌟 Adds a running top bar on page changes */}
+        <NextTopLoader 
+          color="#132A33" // Match your clinical-teal or brand theme color hex code
+          initialPosition={0.08}
+          crawlSpeed={200}
+          height={3}
+          crawl={true}
+          showSpinner={false}
+          easing="ease"
+          speed={200}
+        />
         {children}
-        <Toaster position="top-right" richColors />
       </body>
     </html>
   );
 }
+

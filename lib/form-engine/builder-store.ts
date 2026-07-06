@@ -17,6 +17,14 @@ function findAndMutate(
   return false;
 }
 
+function pinSubmitLast(components: FormComponentNode[]) {
+  const idx = components.findIndex((c) => c.type === "submit");
+  if (idx !== -1 && idx !== components.length - 1) {
+    const [submit] = components.splice(idx, 1);
+    components.push(submit);
+  }
+}
+
 function cloneWithNewIds(node: FormComponentNode): FormComponentNode {
   return {
     ...node,
@@ -97,6 +105,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
       } else {
         section.components.push(node);
       }
+      pinSubmitLast(section.components);
       return { schema, history: [...state.history, state.schema], future: [], selectedId: node.id, lastHistoryTimestamp: Date.now() };
     }),
 
@@ -153,6 +162,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
         if (idx !== -1) {
           const clone = cloneWithNewIds(section.components[idx]);
           section.components.splice(idx + 1, 0, clone);
+          pinSubmitLast(section.components);
           return { schema, history: [...state.history, state.schema], future: [], selectedId: clone.id, lastHistoryTimestamp: Date.now() };
         }
       }
@@ -186,6 +196,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
       if (!section) return state;
       const clone = cloneWithNewIds(state.clipboard);
       section.components.push(clone);
+      pinSubmitLast(section.components);
       return { schema, history: [...state.history, state.schema], future: [], selectedId: clone.id, lastHistoryTimestamp: Date.now() };
     }),
 
@@ -199,6 +210,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
       if (fromIdx === -1 || toIdx === -1) return state;
       const [item] = section.components.splice(fromIdx, 1);
       section.components.splice(toIdx, 0, item);
+      pinSubmitLast(section.components);
       return { schema, history: [...state.history, state.schema], future: [], lastHistoryTimestamp: Date.now() };
     }),
 

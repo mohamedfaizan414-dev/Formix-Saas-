@@ -20,10 +20,36 @@ export interface FieldRendererProps {
   error?: string;
 }
 
+// 🌟 STRATEGIC FIX 1: Alignment text & items flow control utility block
+export function alignmentClass(align?: string) {
+  switch (align) {
+    case "center": 
+      return "text-center flex flex-col items-center justify-center mx-auto";
+    case "right": 
+      return "text-right flex flex-col items-end justify-end ml-auto";
+    default: 
+      return "text-left flex flex-col items-start justify-start mr-auto";
+  }
+}
+
+// STRUCTURAL ACCENT ALERT UTILITY
+export function accentClass(accent?: string) {
+  switch (accent) {
+    case "teal": return "border-l-2 border-l-clinical-teal pl-2 sm:pl-3";
+    case "sage": return "border-l-2 border-l-clinical-sage pl-2 sm:pl-3";
+    case "brick": return "border-l-2 border-l-clinical-brick pl-2 sm:pl-3";
+    case "amber": return "border-l-2 border-l-clinical-amber pl-2 sm:pl-3";
+    default: return "";
+  }
+}
+
 export function FieldShell({ node, error, children }: { node: FormComponentNode; error?: string; children: React.ReactNode }) {
-  if (["heading", "paragraph", "label", "divider", "htmlBlock", "imageDisplay", "spacer"].includes(node.type)) {
+  // Check if current item belongs to descriptive presentation blocks
+  const isPresentationElement = ["heading", "paragraph", "label", "divider", "htmlBlock", "imageDisplay", "spacer"].includes(node.type);
+
+  if (isPresentationElement) {
     return (
-      <div className={cn("px-2 py-1.5 w-full box-border", accentClass(node.display?.colorAccent))}>
+      <div className={cn("px-2 py-1.5 w-full box-border", alignmentClass(node.display?.align), accentClass(node.display?.colorAccent))}>
         {children}
       </div>
     );
@@ -31,7 +57,7 @@ export function FieldShell({ node, error, children }: { node: FormComponentNode;
 
   const isActionType = ["submit", "reset", "cancel", "previous", "next"].includes(node.type);
   
-  // Responsive layout widths: converts fixed desktop parameters into a single responsive grid
+  // Converts layout parameters on fixed grids
   const widthClass = (() => {
     switch (node.display?.width) {
       case "half": return "w-full md:w-1/2";
@@ -42,30 +68,36 @@ export function FieldShell({ node, error, children }: { node: FormComponentNode;
   })();
 
   return (
-    <div className={cn("space-y-1.5 px-2 py-1.5 box-border flex-none", widthClass, accentClass(node.display?.colorAccent))}>
-      <div className="w-full">
+    // 🌟 STRATEGIC FIX 2: Added alignmentClass directly to the main element field shell block wrapper
+    <div className={cn("space-y-1.5 px-2 py-1.5 box-border flex-none", widthClass, alignmentClass(node.display?.align), accentClass(node.display?.colorAccent))}>
+      <div className="w-full flex flex-col">
         {node.label && !isActionType && (
-          <label className="mb-1.5 flex items-center gap-1 text-xs sm:text-sm font-medium text-ink dark:text-white/85 break-words">
+          <label className={cn("mb-1.5 flex items-center gap-1 text-xs sm:text-sm font-medium text-ink dark:text-white/85 break-words",
+            node.display?.align === "center" ? "justify-center text-center" : node.display?.align === "right" ? "justify-end text-right" : "justify-start text-left"
+          )}>
             {node.label}
             {node.validation?.required && <span className="text-clinical-brick">*</span>}
           </label>
         )}
-        <div className="w-full min-w-0">{children}</div>
+        
+        {/* 🌟 STRATEGIC FIX 3: Isolated wrapper layer styles to force inputs to shift box sizes instead of taking 100% space */}
+        <div className={cn("w-full min-w-0 flex", 
+          node.display?.align === "center" ? "justify-center" : node.display?.align === "right" ? "justify-end" : "justify-start"
+        )}>
+          {/* Constrain inner content max widths so elements honor the flexing flow alignment */}
+          <div className={cn("min-w-0 w-full", 
+            ["toggle", "switch", "checkbox", "radio", "yesno", "submit", "reset", "cancel"].includes(node.type) ? "w-auto max-w-full" : "w-full"
+          )}>
+            {children}
+          </div>
+        </div>
       </div>
-      {node.helpText && <p className="text-[11px] sm:text-xs text-ink-soft/80 dark:text-white/40 break-words">{node.helpText}</p>}
-      {error && <p className="text-xs text-clinical-brick">{error}</p>}
+      {node.helpText && <p className={cn("text-[11px] sm:text-xs text-ink-soft/80 dark:text-white/40 break-words mt-1",
+        node.display?.align === "center" ? "text-center w-full" : node.display?.align === "right" ? "text-right w-full" : "text-left"
+      )}>{node.helpText}</p>}
+      {error && <p className="text-xs text-clinical-brick mt-1">{error}</p>}
     </div>
   );
-}
-
-export function accentClass(accent?: string) {
-  switch (accent) {
-    case "teal": return "border-l-2 border-l-clinical-teal pl-2 sm:pl-3";
-    case "sage": return "border-l-2 border-l-clinical-sage pl-2 sm:pl-3";
-    case "brick": return "border-l-2 border-l-clinical-brick pl-2 sm:pl-3";
-    case "amber": return "border-l-2 border-l-clinical-amber pl-2 sm:pl-3";
-    default: return "";
-  }
 }
 
 function ReadOnlyComposite({ node, value }: { node: FormComponentNode; value: any }) {
@@ -225,7 +257,6 @@ function SignaturePad({ disabled, value, onChange }: { disabled?: boolean; value
     }
   }, [value]);
 
-  // Adjust signature pad viewport dimensions relative to active grid width dynamically
   React.useEffect(() => {
     if (canvasRef.current && containerRef.current) {
       const width = containerRef.current.getBoundingClientRect().width;
@@ -253,7 +284,6 @@ function SignaturePad({ disabled, value, onChange }: { disabled?: boolean; value
 }
 
 export function FieldRenderer({ node, value, onChange, disabled, interactive = true, readOnlyView = false, error }: FieldRendererProps) {
-  
   if (readOnlyView) {
     if (["heading", "paragraph", "label", "divider", "htmlBlock", "spacer"].includes(node.type)) {
       return <FieldShell node={node} error={error}>{(() => {
@@ -279,7 +309,7 @@ export function FieldRenderer({ node, value, onChange, disabled, interactive = t
           case "quarter": return "sm:w-1/2 md:w-1/4";
           default: return "w-full";
         }
-      })(), accentClass(node.display?.colorAccent))}>
+      })(), alignmentClass(node.display?.align), accentClass(node.display?.colorAccent))}>
         <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-ink-soft/70 dark:text-white/40 break-words">
           {node.label || node.internalName}
         </span>

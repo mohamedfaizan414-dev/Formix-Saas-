@@ -55,7 +55,12 @@ export function BuilderShell({ formId, status, initialSchema }: { formId: string
       const def = FIELD_REGISTRY[fieldType];
       if (!def) return;
       const section = schema.sections.find((s) => s.id === activeSectionId) ?? schema.sections[0];
-      addComponent(section.id, def.createNode());
+
+      // Insert at the position it was dropped on, instead of always appending to the end.
+      const overIdx = section.components.findIndex((c) => c.id === over.id);
+      const index = overIdx !== -1 ? overIdx : undefined;
+
+      addComponent(section.id, def.createNode(), undefined, index);
       // On mobile, adding a field from the palette should jump the user to the canvas
       // so they can immediately see/arrange what they just added.
       setMobilePane("canvas");

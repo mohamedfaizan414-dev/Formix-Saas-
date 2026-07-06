@@ -41,6 +41,7 @@
     "nanoid": "5.0.9",
     "next": "15.5.20",
     "next-cloudinary": "6.16.0",
+    "nextjs-toploader": "^3.9.17",
     "postcss": "8.5.1",
     "prisma": "6.2.1",
     "react": "19.0.0",

@@ -1,4 +1,3 @@
-// components/renderer/dynamic-form-renderer.tsx
 "use client";
 
 import * as React from "react";
@@ -14,7 +13,7 @@ import { Button } from "@/components/ui/button";
 interface DynamicFormRendererProps {
   schema: FormSchema;
   initialValues?: Record<string, unknown>;
-  mode?: "fill" | "preview" | "view";   
+  mode?: "fill" | "preview";
   onSubmit?: (values: Record<string, unknown>, isDraft: boolean) => Promise<void> | void;
 }
 
@@ -38,36 +37,36 @@ function renderNode(
   setValue: (name: string, v: unknown) => void,
   fieldStates: ReturnType<typeof computeRuntimeState>["fields"],
   errors: Record<string, string>,
-  mode: "fill" | "preview" | "view"
+  depth = 0
 ): React.ReactNode {
   const state = fieldStates[node.id];
   if (state && !state.visible) return null;
 
   if (isLayoutType(node.type)) {
-    const childNodes = (node.children ?? []).map((c) => renderNode(c, values, setValue, fieldStates, errors, mode));
+    const childNodes = (node.children ?? []).map((c) => renderNode(c, values, setValue, fieldStates, errors, depth + 1));
     switch (node.type) {
       case "row":
         return (
-          <div key={node.id} className="flex flex-wrap w-full">
+          <div key={node.id} className="flex flex-col gap-4">
             {childNodes}
           </div>
         );
       case "section":
         return (
-          <fieldset key={node.id} className="w-full space-y-2 rounded-md border border-ink/10 p-3 sm:p-5 dark:border-white/10 box-border my-2">
-            {node.label && <legend className="stamp px-1.5 text-[10px] sm:text-xs font-semibold text-clinical-sage tracking-wider">{node.label}</legend>}
-            <div className="flex flex-wrap w-full">{childNodes}</div>
+          <fieldset key={node.id} className="space-y-4 rounded-md border border-ink/10 p-5 dark:border-white/10">
+            {node.label && <legend className="stamp px-1 text-xs text-clinical-sage">{node.label}</legend>}
+            <div className="flex flex-col gap-4">{childNodes}</div>
           </fieldset>
         );
       case "card":
         return (
-          <div key={node.id} className="w-full rounded-md border border-ink/10 bg-white p-3 sm:p-5 shadow-panel dark:border-white/10 dark:bg-paper-darkdim box-border my-2">
-            {node.label && <h4 className="mb-2.5 font-display text-xs sm:text-sm font-semibold text-ink dark:text-white/90 break-words">{node.label}</h4>}
-            <div className="flex flex-wrap w-full">{childNodes}</div>
+          <div key={node.id} className="rounded-md border border-ink/10 bg-white p-5 shadow-panel dark:border-white/10 dark:bg-paper-darkdim">
+            {node.label && <h4 className="mb-3 font-display text-sm font-semibold">{node.label}</h4>}
+            <div className="flex flex-col gap-4">{childNodes}</div>
           </div>
         );
       default:
-        return <div key={node.id} className="flex w-full flex-wrap">{childNodes}</div>;
+        return <div key={node.id} className="space-y-4">{childNodes}</div>;
     }
   }
 
@@ -77,8 +76,7 @@ function renderNode(
       node={node}
       value={values[node.internalName]}
       onChange={(v) => setValue(node.internalName, v)}
-      disabled={state?.disabled || mode === "view"}
-      readOnlyView={mode === "view"}
+      disabled={state?.disabled}
       error={errors[node.internalName]}
     />
   );
@@ -91,6 +89,7 @@ export function DynamicFormRenderer({ schema, initialValues, mode = "fill", onSu
   const [submitting, setSubmitting] = React.useState(false);
 
   const runtime = React.useMemo(() => computeRuntimeState(schema, values), [schema, values]);
+
   const setValue = (name: string, v: unknown) => setValues((prev) => ({ ...prev, [name]: v }));
 
   const nodeIdToName = React.useMemo(() => {
@@ -106,6 +105,7 @@ export function DynamicFormRenderer({ schema, initialValues, mode = "fill", onSu
   }, [schema]);
 
   React.useEffect(() => {
+    // apply forced values from setValue-type conditional rules
     const patch: Record<string, unknown> = {};
     let changed = false;
     Object.entries(runtime.fields).forEach(([nodeId, state]) => {
@@ -118,10 +118,11 @@ export function DynamicFormRenderer({ schema, initialValues, mode = "fill", onSu
       }
     });
     if (changed) setValues((prev) => ({ ...prev, ...patch }));
-  }, [runtime, values, nodeIdToName]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runtime]);
 
   const section = schema.sections[activeSection];
-  const allNodesInSection = section?.components ?? [];
+  const allNodesInSection = section.components;
 
   async function handleSubmit(e: React.FormEvent, isDraft: boolean) {
     e.preventDefault();
@@ -152,17 +153,17 @@ export function DynamicFormRenderer({ schema, initialValues, mode = "fill", onSu
   const isLastSection = activeSection === schema.sections.length - 1;
 
   return (
-    <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-5 sm:space-y-6 w-full max-w-full overflow-hidden">
+    <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-6">
       {schema.sections.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-2 pt-0.5 thin-scroll scroll-smooth w-full items-center -mx-1 px-1">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {schema.sections.map((s, i) => (
             <button
               key={s.id}
               type="button"
               onClick={() => setActiveSection(i)}
               className={cn(
-                "shrink-0 rounded-full border px-3 py-1 text-[11px] sm:text-xs font-medium transition-all whitespace-nowrap min-h-[28px]",
-                i === activeSection ? "border-clinical-teal bg-clinical-teal text-paper shadow-sm" : "border-ink/15 text-ink-soft hover:bg-ink/5"
+                "shrink-0 rounded-full border px-3 py-1 text-xs font-medium",
+                i === activeSection ? "border-clinical-teal bg-clinical-teal text-paper" : "border-ink/15 text-ink-soft hover:bg-ink/5"
               )}
             >
               {i + 1}. {s.title}
@@ -171,30 +172,30 @@ export function DynamicFormRenderer({ schema, initialValues, mode = "fill", onSu
         </div>
       )}
 
-      <div className="flex flex-wrap w-full box-border">
-        {allNodesInSection.map((n) => renderNode(n, values, setValue, runtime.fields, errors, mode))}
+      <div className="flex flex-col gap-4">
+        {allNodesInSection.map((n) => renderNode(n, values, setValue, runtime.fields, errors))}
       </div>
 
       {mode === "fill" && (
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between border-t border-ink/10 pt-4 dark:border-white/10 w-full">
-          <div className="w-full sm:w-auto order-2 sm:order-1">
+        <div className="flex items-center justify-between border-t border-ink/10 pt-4 dark:border-white/10">
+          <div>
             {activeSection > 0 && (
-              <Button type="button" variant="outline" onClick={() => setActiveSection((s) => s - 1)} className="w-full sm:w-auto h-9 text-xs sm:text-sm">
-                Previous Section
+              <Button type="button" variant="outline" onClick={() => setActiveSection((s) => s - 1)}>
+                Previous
               </Button>
             )}
           </div>
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto order-1 sm:order-2">
-            <Button type="button" variant="ghost" disabled={submitting} onClick={(e) => handleSubmit(e as any, true)} className="h-9 text-xs sm:text-sm py-1.5">
-              Save Draft
+          <div className="flex gap-2">
+            <Button type="button" variant="ghost" disabled={submitting} onClick={(e) => handleSubmit(e as any, true)}>
+              Save draft
             </Button>
             {!isLastSection ? (
-              <Button type="button" onClick={() => setActiveSection((s) => s + 1)} className="h-9 text-xs sm:text-sm py-1.5">
-                Next Section
+              <Button type="button" onClick={() => setActiveSection((s) => s + 1)}>
+                Next section
               </Button>
             ) : (
-              <Button type="submit" disabled={submitting} className="h-9 text-xs sm:text-sm py-1.5">
-                {submitting ? "Submitting…" : "Submit Final Form"}
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Submitting…" : "Submit form"}
               </Button>
             )}
           </div>
