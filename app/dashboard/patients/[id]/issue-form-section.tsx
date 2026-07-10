@@ -19,7 +19,7 @@ interface IssueFormSectionProps {
   availableForms: FormOption[];
 }
 
-export function IssueFormSection({ patientId, availableForms }: IssueFormSectionProps) {
+export function IssueFormSection({ patientId, patientEmail, patientName, availableForms }: IssueFormSectionProps) {
   const router = useRouter();
   const [selectedFormId, setSelectedFormId] = React.useState("");
   const [sending, setSending] = React.useState(false);
@@ -29,21 +29,33 @@ export function IssueFormSection({ patientId, availableForms }: IssueFormSection
       toast.error("Choose a form first.");
       return;
     }
+    
     setSending(true);
     try {
+      // 🌟 FIXED: Pass all attributes down to the request body to fulfill email service contracts
       const res = await fetch("/api/patients/assign-form", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patientId, formId: selectedFormId }),
+        body: JSON.stringify({ 
+          patientId, 
+          formId: selectedFormId,
+          patientEmail,
+          patientName,
+          formTitle: availableForms.find(f => f.id === selectedFormId)?.title || "Clinical Document"
+        }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to send form.");
+
+      // Avoid unexpected end of JSON errors if status codes fail
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: "Server rejected request with an empty body." }));
+        throw new Error(errData.error || "Failed to process form assignment.");
+      }
 
       toast.success("Form sent to patient's email.");
       setSelectedFormId("");
       router.refresh();
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message || "An unexpected network error occurred.");
     } finally {
       setSending(false);
     }
@@ -60,14 +72,14 @@ export function IssueFormSection({ patientId, availableForms }: IssueFormSection
   return (
     <div className="space-y-3 rounded-md border border-ink/10 bg-white p-4 dark:border-white/10 dark:bg-paper-darkdim shadow-panel">
       <Select value={selectedFormId} onChange={(e) => setSelectedFormId(e.target.value)}>
-        <option value="">Select a form…</option>
+        <option value="">Select a form...</option>
         {availableForms.map((f) => (
           <option key={f.id} value={f.id}>{f.title}</option>
         ))}
       </Select>
       <Button onClick={handleSend} disabled={sending} className="w-full gap-2">
         {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        {sending ? "Sending…" : "Send to patient"}
+        {sending ? "Sending..." : "Send to patient"}
       </Button>
     </div>
   );
