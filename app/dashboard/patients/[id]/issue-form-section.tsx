@@ -25,41 +25,37 @@ export function IssueFormSection({ patientId, patientEmail, patientName, availab
   const [sending, setSending] = React.useState(false);
 
   async function handleSend() {
-    if (!selectedFormId) {
-      toast.error("Choose a form first.");
-      return;
-    }
-    
-    setSending(true);
-    try {
-      // 🌟 FIXED: Pass all attributes down to the request body to fulfill email service contracts
-      const res = await fetch("/api/patients/assign-form", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          patientId, 
-          formId: selectedFormId,
-          patientEmail,
-          patientName,
-          formTitle: availableForms.find(f => f.id === selectedFormId)?.title || "Clinical Document"
-        }),
-      });
-
-      // Avoid unexpected end of JSON errors if status codes fail
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({ error: "Server rejected request with an empty body." }));
-        throw new Error(errData.error || "Failed to process form assignment.");
-      }
-
-      toast.success("Form sent to patient's email.");
-      setSelectedFormId("");
-      router.refresh();
-    } catch (err: any) {
-      toast.error(err.message || "An unexpected network error occurred.");
-    } finally {
-      setSending(false);
-    }
+  if (!selectedFormId) {
+    toast.error("Choose a form first.");
+    return;
   }
+  
+  setSending(true);
+  try {
+    // 🌟 FIXED: Routed to the main stable API via query parameter tags
+    const res = await fetch("/api/patients?action=assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        patientId, 
+        formId: selectedFormId 
+      }),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ error: "Server rejected transaction parameters." }));
+      throw new Error(errData.error || "Failed to process form assignment.");
+    }
+
+    toast.success("Form sent to patient's email.");
+    setSelectedFormId("");
+    router.refresh();
+  } catch (err: any) {
+    toast.error(err.message || "An unexpected network error occurred.");
+  } finally {
+    setSending(false);
+  }
+}
 
   if (availableForms.length === 0) {
     return (

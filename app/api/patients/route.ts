@@ -13,27 +13,48 @@ const createPatientSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const body = await req.json().catch(() => null);
-  const parsed = createPatientSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
-  }
-
   try {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
+    const action = searchParams.get("action"); // 🌟 Read the query parameter action label
+
+    const body = await req.json().catch(() => null);
+
+    // 🌟 ROUTINE 1: HANDLE FORM ASSIGNMENT DISPATCH
+    if (action === "assign") {
+      if (!body?.patientId || !body?.formId) {
+        return NextResponse.json({ error: "Missing patientId or formId attributes." }, { status: 400 });
+      }
+
+      const assignment = await PatientService.assignForm(body.patientId, body.formId, {
+        id: session.sub ?? (session as any).id,
+        role: session.role,
+        organizationId: session.hospitalId ?? null,
+      });
+
+      return NextResponse.json({ assignment }, { status: 201 });
+    }
+
+    // 🌟 ROUTINE 2: HANDLE NEW PATIENT CREATION (Your existing code)
+    const parsed = createPatientSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+    }
+
     const patient = await PatientService.createPatient(parsed.data, {
       id: session.sub ?? (session as any).id,
       role: session.role,
       organizationId: session.hospitalId ?? null,
     });
+
     return NextResponse.json({ patient }, { status: 201 });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message ?? "Failed to create patient." }, { status: 400 });
+    console.error("POST operational path breakdown:", err);
+    return NextResponse.json({ error: err.message ?? "Failed to complete transaction processing." }, { status: 400 });
   }
 }
-
 
 
 
