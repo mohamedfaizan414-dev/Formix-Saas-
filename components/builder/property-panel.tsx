@@ -45,13 +45,15 @@ export function PropertyPanel() {
   const def = FIELD_REGISTRY[node.type];
   const supports = def?.supports ?? {};
   const isLayout = isLayoutType(node.type);
+  const isTypography = ["heading", "paragraph", "label"].includes(node.type);
 
   const patch = (p: Partial<FormComponentNode>) => updateComponent(node.id, p);
   const patchValidation = (p: Partial<FormComponentNode["validation"]>) => patch({ validation: { ...node.validation, ...p } });
   const patchDisplay = (p: Partial<FormComponentNode["display"]>) => patch({ display: { ...node.display, ...p } });
+  const patchMeta = (p: Record<string, unknown>) => patch({ meta: { ...node.meta, ...p } });
 
   return (
-   <aside className="thin-scroll flex h-full w-full shrink-0 flex-col overflow-y-auto border-l border-ink/10 bg-paper-dim dark:border-white/10 dark:bg-paper-darkdim md:w-80">
+    <aside className="thin-scroll flex h-full w-full shrink-0 flex-col overflow-y-auto border-l border-ink/10 bg-paper-dim dark:border-white/10 dark:bg-paper-darkdim md:w-80">
       <div className="border-b border-ink/10 p-4 dark:border-white/10">
         <p className="stamp text-[10px] text-clinical-sage">{def?.label ?? node.type}</p>
         <p className="mt-0.5 font-mono text-xs text-ink-soft/60">{node.internalName}</p>
@@ -62,7 +64,7 @@ export function PropertyPanel() {
           <TabsList>
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="display">Display</TabsTrigger>
-            {!isLayout && <TabsTrigger value="validation">Validation</TabsTrigger>}
+            {!isLayout && !isTypography && <TabsTrigger value="validation">Validation</TabsTrigger>}
           </TabsList>
         </Tabs>
 
@@ -70,23 +72,25 @@ export function PropertyPanel() {
           <TabsContent value="general">
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label>Field label</Label>
+                <Label>{isTypography ? "Text Content" : "Field label"}</Label>
                 <Input value={node.label ?? ""} onChange={(e) => patch({ label: e.target.value })} />
               </div>
               <div className="space-y-1.5">
                 <Label>Internal name</Label>
                 <Input value={node.internalName} onChange={(e) => patch({ internalName: e.target.value })} className="font-mono text-xs" />
               </div>
-              {!isLayout && (
+              {!isLayout && !isTypography && (
                 <div className="space-y-1.5">
                   <Label>Placeholder</Label>
                   <Input value={node.placeholder ?? ""} onChange={(e) => patch({ placeholder: e.target.value })} />
                 </div>
               )}
-              <div className="space-y-1.5">
-                <Label>Help text</Label>
-                <Textarea rows={2} value={node.helpText ?? ""} onChange={(e) => patch({ helpText: e.target.value })} />
-              </div>
+              {!isTypography && (
+                <div className="space-y-1.5">
+                  <Label>Help text</Label>
+                  <Textarea rows={2} value={node.helpText ?? ""} onChange={(e) => patch({ helpText: e.target.value })} />
+                </div>
+              )}
 
               {supports.orientation && (
                 <div className="space-y-1.5">
@@ -133,26 +137,25 @@ export function PropertyPanel() {
                   </Button>
                 </div>
               )}
-
-              {supports.fileConfig && (
-                <div className="space-y-1.5">
-                  <Label>Max size (MB)</Label>
-                  <Input type="number" value={(node.meta?.maxSizeMb as number) ?? 10} onChange={(e) => patch({ meta: { ...node.meta, maxSizeMb: Number(e.target.value) } })} />
-                </div>
-              )}
             </div>
           </TabsContent>
 
           <TabsContent value="display">
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label>Width</Label>
-                <Select value={node.display?.width ?? "full"} onChange={(e) => patchDisplay({ width: e.target.value as any })}>
-                  <option value="full">Full width</option>
-                  <option value="half">Half</option>
-                  <option value="third">Third</option>
-                  <option value="quarter">Quarter</option>
-                </Select>
+                <Label>Width Slot</Label>
+            
+
+  <Select value={node.display?.width ?? "full"} onChange={(e) => patchDisplay({ width: e.target.value as any })}>
+    <option value="full">Full width (100%)</option>
+    <option value="three-quarters">Three-Quarters (75%)</option> {/* 🌟 Added */}
+    <option value="two-thirds">Two-Thirds (66.6%)</option>      {/* 🌟 Added */}
+    <option value="half">Half width (50%)</option>
+    <option value="third">Third width (33.3%)</option>
+    <option value="quarter">Quarter width (25%)</option>
+    <option value="sixth">Sixth width (16.6%)</option>
+  </Select>
+
               </div>
               <div className="space-y-1.5">
                 <Label>Alignment</Label>
@@ -162,8 +165,54 @@ export function PropertyPanel() {
                   <option value="right">Right align</option>
                 </Select>
               </div>
+
+              {/* Advanced Text Customizer Sub-section */}
+              {isTypography && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>Font Scale size</Label>
+                    <Select value={(node.meta?.fontSize as string) ?? "base"} onChange={(e) => patchMeta({ fontSize: e.target.value })}>
+                      <option value="xs">Extra Small</option>
+                      <option value="sm">Small</option>
+                      <option value="base">Normal (Base)</option>
+                      <option value="lg">Large</option>
+                      <option value="xl">Extra Large (Heading size)</option>
+                      <option value="2xl">2X Large</option>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Font Weight</Label>
+                    <Select value={(node.meta?.fontWeight as string) ?? "normal"} onChange={(e) => patchMeta({ fontWeight: e.target.value })}>
+                      <option value="normal">Normal</option>
+                      <option value="medium">Medium</option>
+                      <option value="semibold">Semibold</option>
+                      <option value="bold">Bold</option>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Font Family</Label>
+                    <Select value={(node.meta?.fontFamily as string) ?? "sans"} onChange={(e) => patchMeta({ fontFamily: e.target.value })}>
+                      <option value="sans">Sans (Default)</option>
+                      <option value="serif">Serif</option>
+                      <option value="mono">Monospace</option>
+                      <option value="display">Display</option>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Text Color</Label>
+                    <Select value={(node.meta?.textColor as string) ?? "default"} onChange={(e) => patchMeta({ textColor: e.target.value })}>
+                      <option value="default">Default Ink</option>
+                      <option value="teal">Clinical Teal</option>
+                      <option value="sage">Clinical Sage</option>
+                      <option value="brick">Clinical Brick</option>
+                      <option value="soft">Soft Gray</option>
+                    </Select>
+                  </div>
+                </>
+              )}
+
               <div className="space-y-1.5">
-                <Label>Accent color</Label>
+                <Label>Accent border color</Label>
                 <Select value={node.display?.colorAccent ?? "none"} onChange={(e) => patchDisplay({ colorAccent: e.target.value as any })}>
                   <option value="none">None</option>
                   <option value="teal">Teal</option>
@@ -175,47 +224,24 @@ export function PropertyPanel() {
             </div>
           </TabsContent>
 
-          {!isLayout && (
+          {!isLayout && !isTypography && (
             <TabsContent value="validation">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <Label className="normal-case tracking-normal">Required</Label>
-                  <Switch checked={!!node.validation.required} onCheckedChange={(v) => patchValidation({ required: v })} />
+                  <Switch checked={!!node.validation?.required} onCheckedChange={(v) => patchValidation({ required: v })} />
                 </div>
                 <div className="flex items-center justify-between">
                   <Label className="normal-case tracking-normal">Read only</Label>
-                  <Switch checked={!!node.validation.readOnly} onCheckedChange={(v) => patchValidation({ readOnly: v })} />
+                  <Switch checked={!!node.validation?.readOnly} onCheckedChange={(v) => patchValidation({ readOnly: v })} />
                 </div>
                 <div className="flex items-center justify-between">
                   <Label className="normal-case tracking-normal">Hidden</Label>
-                  <Switch checked={!!node.validation.hidden} onCheckedChange={(v) => patchValidation({ hidden: v })} />
+                  <Switch checked={!!node.validation?.hidden} onCheckedChange={(v) => patchValidation({ hidden: v })} />
                 </div>
                 <div className="flex items-center justify-between">
                   <Label className="normal-case tracking-normal">Disabled</Label>
-                  <Switch checked={!!node.validation.disabled} onCheckedChange={(v) => patchValidation({ disabled: v })} />
-                </div>
-
-                {supports.minMaxLength && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1.5"><Label>Min length</Label><Input type="number" value={node.validation.minLength ?? ""} onChange={(e) => patchValidation({ minLength: e.target.value ? Number(e.target.value) : undefined })} /></div>
-                    <div className="space-y-1.5"><Label>Max length</Label><Input type="number" value={node.validation.maxLength ?? ""} onChange={(e) => patchValidation({ maxLength: e.target.value ? Number(e.target.value) : undefined })} /></div>
-                  </div>
-                )}
-                {supports.minMax && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1.5"><Label>Min value</Label><Input type="number" value={node.validation.min ?? ""} onChange={(e) => patchValidation({ min: e.target.value ? Number(e.target.value) : undefined })} /></div>
-                    <div className="space-y-1.5"><Label>Max value</Label><Input type="number" value={node.validation.max ?? ""} onChange={(e) => patchValidation({ max: e.target.value ? Number(e.target.value) : undefined })} /></div>
-                  </div>
-                )}
-                {supports.pattern && (
-                  <div className="space-y-1.5">
-                    <Label>Regex pattern</Label>
-                    <Input value={node.validation.pattern ?? ""} onChange={(e) => patchValidation({ pattern: e.target.value })} className="font-mono text-xs" />
-                  </div>
-                )}
-                <div className="space-y-1.5">
-                  <Label>Validation message</Label>
-                  <Input value={node.validation.customMessage ?? ""} onChange={(e) => patchValidation({ customMessage: e.target.value })} />
+                  <Switch checked={!!node.validation?.disabled} onCheckedChange={(v) => patchValidation({ disabled: v })} />
                 </div>
               </div>
             </TabsContent>

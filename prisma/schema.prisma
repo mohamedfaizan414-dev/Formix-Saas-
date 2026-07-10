@@ -28,6 +28,12 @@ enum SubmissionStatus {
   AMENDED
 }
 
+// 🆕 Added for Patients feature
+enum FormAssignmentStatus {
+  PENDING
+  SUBMITTED
+}
+
 // ---------- Tenancy ----------
 
 model Hospital {
@@ -46,6 +52,7 @@ model Hospital {
   templates   Template[]
   submissions Submission[]
   auditLogs   AuditLog[]
+  patients    Patient[] // 🆕
 
   @@map("hospitals")
 }
@@ -111,6 +118,7 @@ model User {
   refreshTokens      RefreshToken[]
   uploadedFiles       FileAsset[]
   notifications       Notification[]
+  assignedForms       FormAssignment[] @relation("FormAssignedBy") // 🆕
 
   @@index([hospitalId])
   @@map("users")
@@ -150,6 +158,7 @@ model Form {
 
   versions    FormVersion[]
   submissions Submission[]
+  assignments FormAssignment[] // 🆕
 
   @@unique([hospitalId, slug])
   @@index([hospitalId, status])
@@ -172,6 +181,7 @@ model FormVersion {
   createdAt    DateTime  @default(now())
 
   submissions Submission[]
+  assignments FormAssignment[] // 🆕
 
   @@unique([formId, versionNumber])
   @@map("form_versions")
@@ -275,4 +285,52 @@ model Notification {
   createdAt DateTime @default(now())
 
   @@map("notifications")
+}
+
+// ---------- Patients (🆕 additive feature) ----------
+
+model Patient {
+  id             String   @id @default(cuid())
+  email          String
+  firstName      String?
+  lastName       String?
+  phone          String?
+  organizationId String
+  hospital       Hospital @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  assignments FormAssignment[]
+
+  // Same patient email can exist under different hospitals, but not
+  // duplicated within the same hospital.
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@map("patients")
+}
+
+// Transactional ledger: one row per form ever sent to a patient.
+// formVersionId is locked at send-time (same pattern as Submission) so a
+// later edit/republish of the form never changes what the patient
+// actually filled out historically.
+model FormAssignment {
+  id            String               @id @default(cuid())
+  token         String               @unique @default(uuid()) // public unauthenticated access
+  patientId     String
+  patient       Patient              @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  formId        String
+  form          Form                 @relation(fields: [formId], references: [id], onDelete: Cascade)
+  formVersionId String
+  formVersion   FormVersion          @relation(fields: [formVersionId], references: [id])
+  formTitle     String               // denormalized snapshot — survives form rename/delete
+  status        FormAssignmentStatus @default(PENDING)
+  assignedById  String
+  assignedBy    User                 @relation("FormAssignedBy", fields: [assignedById], references: [id])
+  sentAt        DateTime             @default(now())
+  submittedAt   DateTime?
+  payload       Json?                // patient-submitted answers, keyed by internalName
+
+  @@index([patientId])
+  @@index([formId])
+  @@map("form_assignments")
 }

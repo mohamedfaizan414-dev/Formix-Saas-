@@ -1,3 +1,4 @@
+// components/builder/builder-shell.tsx
 "use client";
 
 import * as React from "react";
@@ -21,7 +22,6 @@ export function BuilderShell({ formId, status, initialSchema }: { formId: string
   const moveComponent = useBuilderStore((s) => s.moveComponent);
   const [activeDragType, setActiveDragType] = React.useState<string | null>(null);
 
-  // Mobile-only: which single pane is visible. Desktop ignores this entirely.
   const [mobilePane, setMobilePane] = React.useState<MobilePane>("canvas");
   const selectedComponentId = useBuilderStore((s) => (s as any).selectedComponentId);
 
@@ -30,8 +30,6 @@ export function BuilderShell({ formId, status, initialSchema }: { formId: string
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formId]);
 
-  // Auto-jump to the Properties pane on mobile whenever a component gets selected,
-  // so tapping a field on canvas naturally reveals its settings without an extra tap.
   React.useEffect(() => {
     if (selectedComponentId) setMobilePane("properties");
   }, [selectedComponentId]);
@@ -56,18 +54,18 @@ export function BuilderShell({ formId, status, initialSchema }: { formId: string
       if (!def) return;
       const section = schema.sections.find((s) => s.id === activeSectionId) ?? schema.sections[0];
 
-      // Insert at the position it was dropped on, instead of always appending to the end.
-      const overIdx = section.components.findIndex((c) => c.id === over.id);
-      const index = overIdx !== -1 ? overIdx : undefined;
+      // 🌟 FIXED: Read the exact calculated insertion index from the grid canvas packing engine
+      const gridIndex = (window as any)._lastGridInsertionIndex;
+      const index = typeof gridIndex === "number" ? gridIndex : undefined;
 
       addComponent(section.id, def.createNode(), undefined, index);
-      // On mobile, adding a field from the palette should jump the user to the canvas
-      // so they can immediately see/arrange what they just added.
+      
+      // Clean up the index tracker safely
+      (window as any)._lastGridInsertionIndex = undefined;
       setMobilePane("canvas");
       return;
     }
 
-    // reordering existing top-level nodes
     if (active.id !== over.id) {
       const section = schema.sections.find((s) => s.components.some((c) => c.id === active.id));
       if (section) moveComponent(String(active.id), String(over.id), section.id);
@@ -81,7 +79,6 @@ export function BuilderShell({ formId, status, initialSchema }: { formId: string
       <div className="flex h-screen flex-col">
         <BuilderToolbar formId={formId} status={status} />
 
-        {/* Mobile-only pane switcher. Hidden entirely on md+ so desktop is untouched. */}
         <div className="flex border-b border-border bg-white dark:bg-paper-darkdim md:hidden">
           {(
             [
@@ -106,30 +103,15 @@ export function BuilderShell({ formId, status, initialSchema }: { formId: string
         </div>
 
         <div className="flex min-h-0 flex-1">
-          {/* Sidebar: full width on mobile when active tab, fixed column on desktop */}
-          <div
-            className={`min-h-0 w-full overflow-y-auto md:block md:w-auto md:flex-none ${
-              mobilePane === "fields" ? "block" : "hidden"
-            }`}
-          >
+          <div className={`min-h-0 w-full overflow-y-auto md:block md:w-auto md:flex-none ${mobilePane === "fields" ? "block" : "hidden"}`}>
             <BuilderSidebar />
           </div>
 
-          {/* Canvas: full width on mobile when active tab, flexible middle column on desktop */}
-          <div
-            className={`min-h-0 w-full min-w-0 overflow-y-auto md:block md:flex-1 ${
-              mobilePane === "canvas" ? "block" : "hidden"
-            }`}
-          >
+          <div className={`min-h-0 w-full min-w-0 overflow-y-auto md:block md:flex-1 ${mobilePane === "canvas" ? "block" : "hidden"}`}>
             <BuilderCanvas />
           </div>
 
-          {/* Property panel: full width on mobile when active tab, fixed column on desktop */}
-          <div
-            className={`min-h-0 w-full overflow-y-auto md:block md:w-auto md:flex-none ${
-              mobilePane === "properties" ? "block" : "hidden"
-            }`}
-          >
+          <div className={`min-h-0 w-full overflow-y-auto md:block md:w-auto md:flex-none ${mobilePane === "properties" ? "block" : "hidden"}`}>
             <PropertyPanel />
           </div>
         </div>

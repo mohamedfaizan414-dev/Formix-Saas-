@@ -1,78 +1,59 @@
 // lib/form-engine/build-zod-schema.ts
-import { z, ZodTypeAny } from "zod";
-import type { FormComponentNode, FormSchema } from "./types";
-import { isLayoutType } from "./field-registry";
+import { z } from "zod";
 
-function fieldToZod(node: FormComponentNode): ZodTypeAny | null {
-  // 🌟 FIXED: Removed 'node.type === "action"' to resolve the non-overlapping type compiler block
-  if (isLayoutType(node.type) || ["heading", "paragraph", "label", "divider", "htmlBlock", "imageDisplay", "spacer", "submit", "reset", "cancel", "previous", "next"].includes(node.type)) {
-    return null; // non-data-bearing nodes
-  }
+export function buildZodSchemaForNodes(fields: any[]) {
+  const shape: Record<string, any> = {};
 
-  let schema: ZodTypeAny;
-  switch (node.type) {
-    case "number":
-    case "rating":
-    case "slider": {
-      let s = z.coerce.number();
-      if (node.validation.min !== undefined) s = s.min(node.validation.min, node.validation.customMessage);
-      if (node.validation.max !== undefined) s = s.max(node.validation.max, node.validation.customMessage);
-      schema = s;
-      break;
+  fields.forEach((field) => {
+    let validator: any = z.any();
+    const fieldType = (field.type || "").toLowerCase();
+
+    switch (fieldType) {
+      case "vitals":
+      case "grid":
+      case "object":
+        validator = z.object({}).passthrough();
+        break;
+      case "allergies":
+      case "repeater":
+      case "array":
+        validator = z.array(z.any());
+        break;
+      case "checkbox":
+      case "consent":
+      case "boolean":
+        validator = z.boolean();
+        break;
+      case "text":
+      case "textarea":
+      case "signature":
+      case "id":
+      case "patientsignature":
+      case "doctorsignature":
+      case "select":
+      default:
+        validator = z.string();
+        break;
     }
-    case "checkbox":
-    case "multiselect":
-      schema = z.array(z.string());
-      break;
-    case "toggle":
-    case "yesno":
-      schema = z.union([z.boolean(), z.string()]);
-      break;
-    case "email": {
-      let s = z.string().email(node.validation.customMessage ?? "Enter a valid email address");
-      schema = s;
-      break;
-    }
-    default: {
-      let s: any = z.string();
-      if (node.validation.minLength !== undefined) s = s.min(node.validation.minLength, node.validation.customMessage);
-      if (node.validation.maxLength !== undefined) s = s.max(node.validation.maxLength, node.validation.customMessage);
-      if (node.validation.pattern) {
-        try {
-          const re = new RegExp(node.validation.pattern);
-          s = s.regex(re, node.validation.customMessage ?? "Value does not match the required format");
-        } catch {
-          // ignore invalid regex authored in the builder
-        }
+
+    if (!field.required && !field.validation?.required) {
+      validator = validator.optional().nullable();
+    } else {
+      if (fieldType === "text" || fieldType === "signature" || fieldType === "patientsignature" || fieldType === "doctorsignature") {
+        validator = validator.min(1, { message: `${field.label || 'Field'} is required.` });
+      } else if (fieldType === "consent") {
+        validator = z.literal(true, {
+          errorMap: () => ({ message: `You must consent to proceed.` }),
+        });
       }
-      schema = s;
     }
-  }
 
-  if (!node.validation.required) {
-    schema = schema.optional().nullable();
-  }
-
-  return schema;
-}
-
-// Builds a Zod object schema from the *currently visible* fields only  
-// caller should pass the runtime-visible node list so hidden/disabled 
-// conditional fields don't block submission.
-export function buildZodSchemaForNodes(nodes: FormComponentNode[]) {
-  const shape: Record<string, ZodTypeAny> = {};
-  const walk = (list: FormComponentNode[]) => {
-    for (const node of list) {
-      const zField = fieldToZod(node);
-      if (zField) shape[node.internalName] = zField;
-      if (node.children) walk(node.children);
+    // 🌟 FIXED: Prioritize internalName to match the DynamicFormRenderer state keys perfectly
+    const fieldKey = field.internalName || field.name || field.id;
+    if (fieldKey) {
+      shape[fieldKey] = validator;
     }
-  };
-  walk(nodes);
+  });
+
   return z.object(shape);
-}
-
-export function buildZodSchemaForForm(schema: FormSchema) {
-  const allNodes = schema.sections.flatMap((s) => s.components);
-  return buildZodSchemaForNodes(allNodes);
 }

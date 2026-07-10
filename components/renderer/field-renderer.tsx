@@ -1,8 +1,8 @@
-// components/renderer/field-renderer.tsx
 "use client";
 
 import * as React from "react";
-import { Star, Upload as UploadIcon, PenLine, Eye, Download, File } from "lucide-react";
+import { Star, Upload as UploadIcon, PenLine, Eye, Download, File, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
@@ -20,19 +20,17 @@ export interface FieldRendererProps {
   error?: string;
 }
 
-// 🌟 STRATEGIC FIX 1: Alignment text & items flow control utility block
 export function alignmentClass(align?: string) {
   switch (align) {
-    case "center": 
+    case "center":
       return "text-center flex flex-col items-center justify-center mx-auto";
-    case "right": 
+    case "right":
       return "text-right flex flex-col items-end justify-end ml-auto";
-    default: 
+    default:
       return "text-left flex flex-col items-start justify-start mr-auto";
   }
 }
 
-// STRUCTURAL ACCENT ALERT UTILITY
 export function accentClass(accent?: string) {
   switch (accent) {
     case "teal": return "border-l-2 border-l-clinical-teal pl-2 sm:pl-3";
@@ -43,36 +41,57 @@ export function accentClass(accent?: string) {
   }
 }
 
+// 🧩 SHARED WIDTH-SLOT ENGINE — used by FieldShell, CanvasNode, ChildNode, and
+// the live DynamicFormRenderer so every surface (builder canvas + published
+// form) resolves "full/half/third/quarter" identically.
+export function widthClass(width?: string) {
+  switch (width) {
+    case "half": 
+      return "w-full md:w-[calc(50%-0.5rem)]";
+    case "third": 
+      return "w-full md:w-[calc(33.333%-0.667rem)]";
+    case "quarter": 
+      return "w-full md:w-[calc(25%-0.75rem)]";
+    default: 
+      return "w-full";
+  }
+}
+
+// 👑 TYPOGRAPHY CUSTOMIZER ENGINE HOOK
+function getTypographyClasses(node: FormComponentNode): string {
+  const size = node.meta?.fontSize ?? "base";
+  const weight = node.meta?.fontWeight ?? "normal";
+  const color = node.meta?.textColor ?? "default";
+  const family = node.meta?.fontFamily ?? "sans";
+
+  const sizeMap: Record<string, string> = { xs: "text-xs", sm: "text-sm", base: "text-base", lg: "text-lg", xl: "text-xl", "2xl": "text-2xl" };
+  const weightMap: Record<string, string> = { normal: "font-normal", medium: "font-medium", semibold: "font-semibold", bold: "font-bold" };
+  const colorMap: Record<string, string> = { default: "text-ink dark:text-white", teal: "text-clinical-teal", sage: "text-clinical-sage", brick: "text-clinical-brick", soft: "text-ink-soft" };
+  const familyMap: Record<string, string> = { sans: "font-sans", serif: "font-serif", mono: "font-mono", display: "font-display" };
+
+  return cn(sizeMap[size as string], weightMap[weight as string], colorMap[color as string], familyMap[family as string]);
+}
+
 export function FieldShell({ node, error, children }: { node: FormComponentNode; error?: string; children: React.ReactNode }) {
-  // Check if current item belongs to descriptive presentation blocks
   const isPresentationElement = ["heading", "paragraph", "label", "divider", "htmlBlock", "imageDisplay", "spacer"].includes(node.type);
 
   if (isPresentationElement) {
     return (
-      <div className={cn("px-2 py-1.5 w-full box-border", alignmentClass(node.display?.align), accentClass(node.display?.colorAccent))}>
+      <div className={cn("px-1 py-1 w-full box-border", alignmentClass(node.display?.align), accentClass(node.display?.colorAccent))}>
         {children}
       </div>
     );
   }
 
   const isActionType = ["submit", "reset", "cancel", "previous", "next"].includes(node.type);
-  
-  // Converts layout parameters on fixed grids
-  const widthClass = (() => {
-    switch (node.display?.width) {
-      case "half": return "w-full md:w-1/2";
-      case "third": return "w-full sm:w-1/2 md:w-1/3";
-      case "quarter": return "w-full sm:w-1/2 md:w-1/4";
-      default: return "w-full";
-    }
-  })();
 
   return (
-    // 🌟 STRATEGIC FIX 2: Added alignmentClass directly to the main element field shell block wrapper
-    <div className={cn("space-y-1.5 px-2 py-1.5 box-border flex-none", widthClass, alignmentClass(node.display?.align), accentClass(node.display?.colorAccent))}>
+    /* 🌟 FIXED: Removed widthClass completely from here. 
+       The parent CSS Grid handles widths via columns. This wrapper should simply occupy full space (w-full). */
+    <div className={cn("space-y-1 w-full box-border flex-none", alignmentClass(node.display?.align), accentClass(node.display?.colorAccent))}>
       <div className="w-full flex flex-col">
         {node.label && !isActionType && (
-          <label className={cn("mb-1.5 flex items-center gap-1 text-xs sm:text-sm font-medium text-ink dark:text-white/85 break-words",
+          <label className={cn("mb-1 flex items-center gap-1 text-xs font-medium text-ink dark:text-white/85 whitespace-nowrap",
             node.display?.align === "center" ? "justify-center text-center" : node.display?.align === "right" ? "justify-end text-right" : "justify-start text-left"
           )}>
             {node.label}
@@ -80,22 +99,19 @@ export function FieldShell({ node, error, children }: { node: FormComponentNode;
           </label>
         )}
         
-        {/* 🌟 STRATEGIC FIX 3: Isolated wrapper layer styles to force inputs to shift box sizes instead of taking 100% space */}
         <div className={cn("w-full min-w-0 flex", 
           node.display?.align === "center" ? "justify-center" : node.display?.align === "right" ? "justify-end" : "justify-start"
         )}>
-          {/* Constrain inner content max widths so elements honor the flexing flow alignment */}
-          <div className={cn("min-w-0 w-full", 
-            ["toggle", "switch", "checkbox", "radio", "yesno", "submit", "reset", "cancel"].includes(node.type) ? "w-auto max-w-full" : "w-full"
-          )}>
+          {/* 🌟 FIXED: Changed conditional width maps to default cleanly to w-full so inputs occupy the entire column span */}
+          <div className="min-w-0 w-full">
             {children}
           </div>
         </div>
       </div>
-      {node.helpText && <p className={cn("text-[11px] sm:text-xs text-ink-soft/80 dark:text-white/40 break-words mt-1",
+      {node.helpText && <p className={cn("text-[10px] text-ink-soft/70 dark:text-white/40 break-words mt-0.5",
         node.display?.align === "center" ? "text-center w-full" : node.display?.align === "right" ? "text-right w-full" : "text-left"
       )}>{node.helpText}</p>}
-      {error && <p className="text-xs text-clinical-brick mt-1">{error}</p>}
+      {error && <p className="text-xs text-clinical-brick mt-0.5">{error}</p>}
     </div>
   );
 }
@@ -177,7 +193,7 @@ function ReadOnlyValue({ node, value }: { node: FormComponentNode; value: any })
         );
       }
       return <span className="font-mono text-xs text-clinical-teal break-all">{value}</span>;
-      
+
     case "signature": case "doctorSignature": case "patientSignature":
       if (typeof value === "string" && value.startsWith("data:image")) {
         return (
@@ -187,7 +203,7 @@ function ReadOnlyValue({ node, value }: { node: FormComponentNode; value: any })
         );
       }
       return <span className="text-xs italic text-ink-soft/40">No signature</span>;
-      
+
     case "checkbox": case "multiselect":
       return <span className="break-words">{Array.isArray(value) ? value.join(", ") : String(value)}</span>;
     case "textarea": case "nursingNotes":
@@ -284,32 +300,33 @@ function SignaturePad({ disabled, value, onChange }: { disabled?: boolean; value
 }
 
 export function FieldRenderer({ node, value, onChange, disabled, interactive = true, readOnlyView = false, error }: FieldRendererProps) {
+  const [uploading, setUploading] = React.useState(false);
+  const isDisabled = disabled || node.validation?.disabled || !interactive || uploading;
+  const commonProps = { disabled: isDisabled, readOnly: node.validation?.readOnly, placeholder: node.placeholder };
+
   if (readOnlyView) {
     if (["heading", "paragraph", "label", "divider", "htmlBlock", "spacer"].includes(node.type)) {
-      return <FieldShell node={node} error={error}>{(() => {
-        switch (node.type) {
-          case "heading": return <h3 className="font-display text-lg sm:text-xl font-semibold break-words">{node.label}</h3>;
-          case "paragraph": return <p className="text-xs sm:text-sm leading-relaxed text-ink-soft dark:text-white/60 break-words">{node.label}</p>;
-          case "label": return <span className="text-[11px] sm:text-xs font-medium uppercase tracking-wide text-ink-soft break-words">{node.label}</span>;
-          case "divider": return <hr className="border-ink/10 dark:border-white/10 my-1" />;
-          case "htmlBlock": return <div className="prose prose-sm max-w-none break-words overflow-x-auto" dangerouslySetInnerHTML={{ __html: (node.meta?.html as string) ?? "" }} />;
-          case "imageDisplay": return <div className="rounded-xs border border-dashed border-ink/20 p-4 text-center text-xs text-ink-soft">Image placeholder</div>;
-          case "spacer": return <div style={{ height: Math.min((node.meta?.heightPx as number) ?? 24, 48) }} />;
-        }
-      })()}</FieldShell>;
+      return (
+        <FieldShell node={node} error={error}>
+          {(() => {
+            switch (node.type) {
+              case "heading": return <h3 className={getTypographyClasses(node)}>{node.label}</h3>;
+              case "paragraph": return <p className={getTypographyClasses(node)}>{node.label}</p>;
+              case "label": return <span className={cn("uppercase tracking-wide", getTypographyClasses(node))}>{node.label}</span>;
+              case "divider": return <hr className="border-ink/10 dark:border-white/10 my-1" />;
+              case "htmlBlock": return <div className="prose prose-sm max-w-none break-words overflow-x-auto" dangerouslySetInnerHTML={{ __html: (node.meta?.html as string) ?? "" }} />;
+              case "imageDisplay": return <div className="rounded-xs border border-dashed border-ink/20 p-4 text-center text-xs text-ink-soft">Image placeholder</div>;
+              case "spacer": return <div style={{ height: Math.min((node.meta?.heightPx as number) ?? 24, 48) }} />;
+            }
+          })()}
+        </FieldShell>
+      );
     }
-    
+
     if (["submit", "reset", "cancel", "previous", "next"].includes(node.type)) return null;
 
     return (
-      <div className={cn("px-3 py-2.5 w-full", (() => {
-        switch (node.display?.width) {
-          case "half": return "md:w-1/2";
-          case "third": return "sm:w-1/2 md:w-1/3";
-          case "quarter": return "sm:w-1/2 md:w-1/4";
-          default: return "w-full";
-        }
-      })(), alignmentClass(node.display?.align), accentClass(node.display?.colorAccent))}>
+      <div className={cn("px-3 py-2.5 w-full", widthClass(node.display?.width), alignmentClass(node.display?.align), accentClass(node.display?.colorAccent))}>
         <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-ink-soft/70 dark:text-white/40 break-words">
           {node.label || node.internalName}
         </span>
@@ -319,9 +336,6 @@ export function FieldRenderer({ node, value, onChange, disabled, interactive = t
       </div>
     );
   }
-
-  const isDisabled = disabled || node.validation?.disabled || !interactive;
-  const commonProps = { disabled: isDisabled, readOnly: node.validation?.readOnly, placeholder: node.placeholder };
 
   const body = (() => {
     switch (node.type) {
@@ -407,26 +421,60 @@ export function FieldRenderer({ node, value, onChange, disabled, interactive = t
       }
 
       case "file": case "image": case "medicalImage": {
-        const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
           const file = e.target.files?.[0];
           if (!file) return onChange(null);
+
+          setUploading(true);
+          const toastId = toast.loading("Uploading to Cloudinary...");
+
           const reader = new FileReader();
-          reader.onload = (ev) => onChange(ev.target?.result);
+          reader.onload = async (ev) => {
+            try {
+              const dataUri = ev.target?.result as string;
+              const res = await fetch("/api/upload", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  dataUri,
+                  originalName: file.name,
+                  resourceType: node.type === "image" ? "image" : "auto"
+                })
+              });
+
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.error || "Upload failed");
+
+              onChange(data.asset.url);
+              toast.success("File uploaded successfully", { id: toastId });
+            } catch (err) {
+              console.error(err);
+              toast.error("Cloudinary upload failed.", { id: toastId });
+              onChange(null);
+            } finally {
+              setUploading(false);
+            }
+          };
           reader.readAsDataURL(file);
         };
+
         return (
-          <label className={cn("flex cursor-pointer items-center justify-center gap-2 rounded-xs border border-dashed border-ink/25 py-5 sm:py-6 px-4 text-xs sm:text-sm text-ink-soft hover:border-clinical-sage transition-colors text-center w-full min-h-[64px]", isDisabled && "pointer-events-none opacity-50")}>
-            <UploadIcon className="h-4 w-4 shrink-0 text-ink-soft/70" />
-            <span className="truncate">{value ? "File attached (Tap to change)" : "Tap to upload asset"}</span>
+          <label className={cn("flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xs border border-dashed border-ink/25 py-5 sm:py-6 px-4 text-xs sm:text-sm text-ink-soft transition-colors hover:border-clinical-sage text-center w-full min-h-[64px]", isDisabled && "pointer-events-none opacity-50 bg-ink/5")}>
+            {uploading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-clinical-teal" />
+            ) : (
+              <UploadIcon className="h-4 w-4 shrink-0 text-ink-soft/70" />
+            )}
+            {uploading ? "Uploading..." : (value ? "File attached (Tap to change)" : "Tap to upload asset")}
             <input type="file" className="hidden" accept={node.meta?.accept as string} disabled={isDisabled} onChange={handleFile} />
           </label>
         );
       }
       case "signature": case "doctorSignature": case "patientSignature": return <SignaturePad disabled={isDisabled} value={value} onChange={onChange} />;
-      
-      case "heading": return <h3 className="font-display text-lg sm:text-xl font-semibold break-words w-full">{node.label}</h3>;
-      case "paragraph": return <p className="text-xs sm:text-sm leading-relaxed text-ink-soft dark:text-white/60 break-words w-full">{node.label}</p>;
-      case "label": return <span className="text-[11px] sm:text-xs font-medium uppercase tracking-wide text-ink-soft break-words w-full">{node.label}</span>;
+
+      case "heading": return <h3 className={getTypographyClasses(node)}>{node.label}</h3>;
+      case "paragraph": return <p className={getTypographyClasses(node)}>{node.label}</p>;
+      case "label": return <span className={cn("uppercase tracking-wide w-full", getTypographyClasses(node))}>{node.label}</span>;
       case "divider": return <hr className="border-ink/10 dark:border-white/10 w-full my-0.5" />;
       case "htmlBlock": return <div className="prose prose-sm max-w-none break-words w-full overflow-x-auto" dangerouslySetInnerHTML={{ __html: (node.meta?.html as string) ?? "" }} />;
       case "imageDisplay": return <div className="rounded-xs border border-dashed border-ink/20 p-4 text-center text-xs text-ink-soft w-full">Static image placeholder</div>;

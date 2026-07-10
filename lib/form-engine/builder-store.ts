@@ -1,3 +1,4 @@
+// lib/form-engine/builder-store.ts
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import type { FormComponentNode, FormSchema } from "./types";
@@ -50,7 +51,7 @@ interface BuilderState {
   future: FormSchema[];
   clipboard: FormComponentNode | null;
   activeSectionId: string;
-  lastHistoryTimestamp: number; // 🧠 Keeps track of typing velocity
+  lastHistoryTimestamp: number;
 
   setSchema: (schema: FormSchema) => void;
   select: (id: string | null) => void;
@@ -61,6 +62,8 @@ interface BuilderState {
   copyComponent: (id: string) => void;
   pasteComponent: (sectionId: string) => void;
   moveComponent: (activeId: string, overId: string | null, sectionId: string) => void;
+  reorderComponent: (sectionId: string, nodeId: string, toIndex: number) => void;
+  setComponentWidth: (sectionId: string, nodeId: string, width: FormComponentNode["display"]["width"]) => void;
   addSection: () => void;
   renameSection: (id: string, title: string) => void;
   removeSection: (id: string) => void;
@@ -82,7 +85,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   future: [],
   clipboard: null,
   activeSectionId: "",
-  lastHistoryTimestamp: 0, // 🧠 Defaults to zero
+  lastHistoryTimestamp: 0,
 
   setSchema: (schema) =>
     set({ schema, activeSectionId: schema.sections[0]?.id ?? "", history: [], future: [], selectedId: null }),
@@ -109,7 +112,6 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
       return { schema, history: [...state.history, state.schema], future: [], selectedId: node.id, lastHistoryTimestamp: Date.now() };
     }),
 
-  // 🧠 ENHANCED: Intelligently throtles history capturing for character keystrokes
   updateComponent: (id, patch) =>
     set((state) => {
       const schema = snapshot(state.schema);
@@ -120,19 +122,36 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
         });
         if (found) break;
       }
-
       const now = Date.now();
-      const isRapidTyping = now - state.lastHistoryTimestamp < 1200; // 1.2 second cluster threshold
-
-      // If typing rapidly, skip append to prevent granular single character undos!
+      const isRapidTyping = now - state.lastHistoryTimestamp < 1200;
       const nextHistory = isRapidTyping ? state.history : [...state.history, state.schema];
 
-      return { 
-        schema, 
-        history: nextHistory, 
-        future: [],
-        lastHistoryTimestamp: now 
-      };
+      return { schema, history: nextHistory, future: [], lastHistoryTimestamp: now };
+    }),
+
+  reorderComponent: (sectionId, nodeId, toIndex) =>
+    set((state) => {
+      const schema = snapshot(state.schema);
+      const section = schema.sections.find((s) => s.id === sectionId);
+      if (!section) return state;
+      const from = section.components.findIndex((c) => c.id === nodeId);
+      if (from === -1) return state;
+      const [moved] = section.components.splice(from, 1);
+      section.components.splice(Math.max(0, Math.min(section.components.length, toIndex)), 0, moved);
+      pinSubmitLast(section.components);
+      return { schema, history: [...state.history, state.schema], future: [] };
+    }),
+
+  setComponentWidth: (sectionId, nodeId, width) =>
+    set((state) => {
+      const schema = snapshot(state.schema);
+      const section = schema.sections.find((s) => s.id === sectionId);
+      if (!section) return state;
+      findAndMutate(section.components, nodeId, (node) => {
+        if (!node.display) node.display = { width: "full" };
+        node.display.width = width;
+      });
+      return { schema, history: [...state.history, state.schema], future: [] };
     }),
 
   removeComponent: (id) =>
@@ -235,13 +254,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
       if (state.schema.sections.length <= 1) return state;
       const schema = snapshot(state.schema);
       schema.sections = schema.sections.filter((s) => s.id !== id);
-      return {
-        schema,
-        activeSectionId: schema.sections[0].id,
-        history: [...state.history, state.schema],
-        future: [],
-        lastHistoryTimestamp: Date.now()
-      };
+      return { schema, activeSectionId: schema.sections[0].id, history: [...state.history, state.schema], future: [], lastHistoryTimestamp: Date.now() };
     }),
 
   setActiveSectionId: (id) => set({ activeSectionId: id }),
@@ -250,24 +263,14 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     set((state) => {
       if (state.history.length === 0) return state;
       const prev = state.history[state.history.length - 1];
-      return {
-        schema: prev,
-        history: state.history.slice(0, -1),
-        future: [state.schema, ...state.future],
-        lastHistoryTimestamp: 0 // Reset threshold on manual manipulation
-      };
+      return { schema: prev, history: state.history.slice(0, -1), future: [state.schema, ...state.future], lastHistoryTimestamp: 0 };
     }),
 
   redo: () =>
     set((state) => {
       if (state.future.length === 0) return state;
       const next = state.future[0];
-      return {
-        schema: next,
-        future: state.future.slice(1),
-        history: [...state.history, state.schema],
-        lastHistoryTimestamp: 0 // Reset threshold on manual manipulation
-      };
+      return { schema: next, future: state.future.slice(1), history: [...state.history, state.schema], lastHistoryTimestamp: 0 };
     }),
 
   reset: () => set({ schema: emptySchema(), history: [], future: [], selectedId: null, lastHistoryTimestamp: 0 }),

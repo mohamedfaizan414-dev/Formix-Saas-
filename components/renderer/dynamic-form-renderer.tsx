@@ -1,11 +1,13 @@
+// components/renderer/dynamic-form-renderer.tsx
 "use client";
 
 import * as React from "react";
 import { toast } from "sonner";
-import { FieldRenderer } from "./field-renderer";
+import { FieldRenderer, widthClass } from "./field-renderer";
 import { computeRuntimeState } from "@/lib/form-engine/conditional-engine";
 import { buildZodSchemaForNodes } from "@/lib/form-engine/build-zod-schema";
 import { isLayoutType } from "@/lib/form-engine/field-registry";
+import { packGrid, rectToGridStyle } from "@/lib/form-engine/grid-engine";
 import type { FormComponentNode, FormSchema } from "@/lib/form-engine/types";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/button";
@@ -31,57 +33,6 @@ function collectVisibleNodes(
   return out;
 }
 
-function renderNode(
-  node: FormComponentNode,
-  values: Record<string, unknown>,
-  setValue: (name: string, v: unknown) => void,
-  fieldStates: ReturnType<typeof computeRuntimeState>["fields"],
-  errors: Record<string, string>,
-  depth = 0
-): React.ReactNode {
-  const state = fieldStates[node.id];
-  if (state && !state.visible) return null;
-
-  if (isLayoutType(node.type)) {
-    const childNodes = (node.children ?? []).map((c) => renderNode(c, values, setValue, fieldStates, errors, depth + 1));
-    switch (node.type) {
-      case "row":
-        return (
-          <div key={node.id} className="flex flex-col gap-4">
-            {childNodes}
-          </div>
-        );
-      case "section":
-        return (
-          <fieldset key={node.id} className="space-y-4 rounded-md border border-ink/10 p-5 dark:border-white/10">
-            {node.label && <legend className="stamp px-1 text-xs text-clinical-sage">{node.label}</legend>}
-            <div className="flex flex-col gap-4">{childNodes}</div>
-          </fieldset>
-        );
-      case "card":
-        return (
-          <div key={node.id} className="rounded-md border border-ink/10 bg-white p-5 shadow-panel dark:border-white/10 dark:bg-paper-darkdim">
-            {node.label && <h4 className="mb-3 font-display text-sm font-semibold">{node.label}</h4>}
-            <div className="flex flex-col gap-4">{childNodes}</div>
-          </div>
-        );
-      default:
-        return <div key={node.id} className="space-y-4">{childNodes}</div>;
-    }
-  }
-
-  return (
-    <FieldRenderer
-      key={node.id}
-      node={node}
-      value={values[node.internalName]}
-      onChange={(v) => setValue(node.internalName, v)}
-      disabled={state?.disabled}
-      error={errors[node.internalName]}
-    />
-  );
-}
-
 export function DynamicFormRenderer({ schema, initialValues, mode = "fill", onSubmit }: DynamicFormRendererProps) {
   const [values, setValues] = React.useState<Record<string, unknown>>(initialValues ?? {});
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -89,40 +40,19 @@ export function DynamicFormRenderer({ schema, initialValues, mode = "fill", onSu
   const [submitting, setSubmitting] = React.useState(false);
 
   const runtime = React.useMemo(() => computeRuntimeState(schema, values), [schema, values]);
-
   const setValue = (name: string, v: unknown) => setValues((prev) => ({ ...prev, [name]: v }));
 
-  const nodeIdToName = React.useMemo(() => {
-    const map: Record<string, string> = {};
-    const walk = (nodes: FormComponentNode[]) => {
-      for (const n of nodes) {
-        map[n.id] = n.internalName;
-        if (n.children) walk(n.children);
-      }
-    };
-    schema.sections.forEach((s) => walk(s.components));
-    return map;
-  }, [schema]);
-
-  React.useEffect(() => {
-    // apply forced values from setValue-type conditional rules
-    const patch: Record<string, unknown> = {};
-    let changed = false;
-    Object.entries(runtime.fields).forEach(([nodeId, state]) => {
-      if (state.forcedValue !== undefined) {
-        const name = nodeIdToName[nodeId];
-        if (name && values[name] !== state.forcedValue) {
-          patch[name] = state.forcedValue;
-          changed = true;
-        }
-      }
-    });
-    if (changed) setValues((prev) => ({ ...prev, ...patch }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runtime]);
-
   const section = schema.sections[activeSection];
-  const allNodesInSection = section.components;
+  
+  // Filter active visibility filters
+  const visibleNodes = React.useMemo(() => {
+    return section.components.filter((n) => runtime.fields[n.id]?.visible ?? true);
+  }, [section.components, runtime.fields]);
+
+  // Derive layout positions in real time using the Skyline packer
+  const layout = React.useMemo(() => packGrid(visibleNodes), [visibleNodes]);
+
+  const isLastSection = activeSection === schema.sections.length - 1;
 
   async function handleSubmit(e: React.FormEvent, isDraft: boolean) {
     e.preventDefault();
@@ -136,26 +66,23 @@ export function DynamicFormRenderer({ schema, initialValues, mode = "fill", onSu
         fieldErrors[String(issue.path[0])] = issue.message;
       });
       setErrors(fieldErrors);
-      toast.error("Some fields need attention before you can submit.");
+      toast.error("Please fill in all required fields.");
       return;
     }
+    
     setErrors({});
     setSubmitting(true);
     try {
       await onSubmit?.(values, isDraft);
-      if (!isDraft) toast.success("Form submitted.");
-      else toast.success("Draft saved.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  const isLastSection = activeSection === schema.sections.length - 1;
-
   return (
-    <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-6">
+    <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-6 w-full">
       {schema.sections.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-2 overflow-x-auto pb-1 w-full">
           {schema.sections.map((s, i) => (
             <button
               key={s.id}
@@ -172,12 +99,55 @@ export function DynamicFormRenderer({ schema, initialValues, mode = "fill", onSu
         </div>
       )}
 
-      <div className="flex flex-col gap-4">
-        {allNodesInSection.map((n) => renderNode(n, values, setValue, runtime.fields, errors))}
+      {/* 🌟 12-COLUMN grid mapping container */}
+      <div 
+        className="w-full grid content-start items-start gap-x-4 gap-y-3"
+        style={{
+          gridTemplateColumns: `repeat(12, minmax(0, 1fr))`,
+          gridAutoRows: `minmax(45px, auto)`
+        }}
+      >
+        {visibleNodes.map((node) => {
+          const rect = layout.positions.get(node.id);
+          if (!rect) return null;
+          const gridStyle = rectToGridStyle(rect);
+
+          if (isLayoutType(node.type)) {
+            return (
+              <div key={node.id} style={gridStyle} className="w-full border border-ink/10 rounded-md p-4 bg-white dark:bg-paper-darkdim">
+                {node.label && <h4 className="mb-2 text-xs font-semibold text-clinical-sage uppercase tracking-wider">{node.label}</h4>}
+                <div className="space-y-3">
+                  {(node.children ?? []).map((child) => (
+                    <FieldRenderer
+                      key={child.id}
+                      node={child}
+                      value={values[child.internalName]}
+                      onChange={(v) => setValue(child.internalName, v)}
+                      disabled={runtime.fields[child.id]?.disabled}
+                      error={errors[child.internalName]}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div key={node.id} style={gridStyle} className="w-full min-w-0">
+              <FieldRenderer
+                node={node}
+                value={values[node.internalName]}
+                onChange={(v) => setValue(node.internalName, v)}
+                disabled={runtime.fields[node.id]?.disabled}
+                error={errors[node.internalName]}
+              />
+            </div>
+          );
+        })}
       </div>
 
       {mode === "fill" && (
-        <div className="flex items-center justify-between border-t border-ink/10 pt-4 dark:border-white/10">
+        <div className="flex items-center justify-between border-t border-ink/10 pt-4 dark:border-white/10 w-full">
           <div>
             {activeSection > 0 && (
               <Button type="button" variant="outline" onClick={() => setActiveSection((s) => s - 1)}>

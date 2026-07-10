@@ -13,10 +13,13 @@ export async function AppShell({ children, active }: { children: React.ReactNode
   const nav = [
     { key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, show: true },
     { key: "forms", label: "Forms", href: "/forms", icon: FileStack, show: true },
+    { key: "patients", label: "Patients Directory", href: "/dashboard/patients", icon: Users, show: true },
     { key: "hospitals", label: "Hospitals", href: "/admin/hospitals", icon: Building2, show: session.role === "SUPER_ADMIN" },
     { key: "users", label: "Users", href: "/admin/users", icon: Users, show: session.role === "SUPER_ADMIN" || session.role === "HOSPITAL_ADMIN" },
-{ key: "audit", label: "Audit logs", href: "/admin/audit-logs", icon: ScrollText, show: session.role === "SUPER_ADMIN" }, ];
-return (
+    { key: "audit", label: "Audit logs", href: "/admin/audit-logs", icon: ScrollText, show: session.role === "SUPER_ADMIN" },
+  ];
+
+  return (
     <div className="flex min-h-screen flex-col lg:flex-row bg-paper dark:bg-paper-dark">
       
       {/* 🌟 PURE CSS ACCESSIBLE MOBILE NAVBAR */}

@@ -93,7 +93,7 @@ export interface ValidationConfig {
 }
 
 export interface DisplayConfig {
-  width?: "full" | "half" | "third" | "quarter";
+ width?: "full" | "half" | "third" | "quarter" | "fifth" | "sixth" | "two-thirds" | "three-quarters";
   fontSize?: "sm" | "base" | "lg" | "xl";
   align?: "left" | "center" | "right";
   borderRadius?: "none" | "sm" | "md" | "lg" | "full";
