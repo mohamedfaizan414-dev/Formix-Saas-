@@ -91,7 +91,17 @@ export function PropertyPanel() {
                   <Textarea rows={2} value={node.helpText ?? ""} onChange={(e) => patch({ helpText: e.target.value })} />
                 </div>
               )}
-
+              {node.type === "consent" && (
+      <div className="space-y-1.5">
+        <Label>Consent Description Text</Label>
+        <Textarea 
+          rows={3} 
+          value={node.description ?? ""} 
+          onChange={(e) => patch({ description: e.target.value })} 
+          placeholder="Enter the terms or acknowledgement text the user must check..."
+        />
+      </div>
+    )}
               {supports.orientation && (
                 <div className="space-y-1.5">
                   <Label>Orientation</Label>
