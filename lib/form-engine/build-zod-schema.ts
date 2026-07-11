@@ -1,4 +1,3 @@
-// lib/form-engine/build-zod-schema.ts
 import { z } from "zod";
 
 export function buildZodSchemaForNodes(fields: any[]) {
@@ -9,6 +8,11 @@ export function buildZodSchemaForNodes(fields: any[]) {
     const fieldType = (field.type || "").toLowerCase();
 
     switch (fieldType) {
+      // 🌟 NEW CASE ASSIGNMENT BLOCK ADDITION
+      case "inlinetemplate":
+        validator = z.object({}).passthrough();
+        break;
+
       case "vitals":
       case "grid":
       case "object":
@@ -27,7 +31,6 @@ export function buildZodSchemaForNodes(fields: any[]) {
       case "text":
       case "textarea":
       case "signature":
-      case "id":
       case "patientsignature":
       case "doctorsignature":
       case "select":
@@ -39,16 +42,15 @@ export function buildZodSchemaForNodes(fields: any[]) {
     if (!field.required && !field.validation?.required) {
       validator = validator.optional().nullable();
     } else {
-      if (fieldType === "text" || fieldType === "signature" || fieldType === "patientsignature" || fieldType === "doctorsignature") {
-        validator = validator.min(1, { message: `${field.label || 'Field'} is required.` });
+      if (fieldType === "text" || fieldType === "signature" || fieldType === "patientsignature") {
+        validator = validator.min(1, { message: `${field.label || "Field"} cannot be submitted blank.` });
       } else if (fieldType === "consent") {
         validator = z.literal(true, {
-          errorMap: () => ({ message: `You must consent to proceed.` }),
+          errorMap: () => ({ message: "Consent checkbox authorization mandatory." }),
         });
       }
     }
 
-    // 🌟 FIXED: Prioritize internalName to match the DynamicFormRenderer state keys perfectly
     const fieldKey = field.internalName || field.name || field.id;
     if (fieldKey) {
       shape[fieldKey] = validator;

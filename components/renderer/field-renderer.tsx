@@ -10,6 +10,9 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils/cn";
 import type { FormComponentNode } from "@/lib/form-engine/types";
 
+// 🌟 Import the custom Inline Template sentence rendering engine
+import { InlineTemplateRenderer } from "./inline-template-renderer";
+
 export interface FieldRendererProps {
   node: FormComponentNode;
   value: unknown;
@@ -41,9 +44,6 @@ export function accentClass(accent?: string) {
   }
 }
 
-// 🧩 SHARED WIDTH-SLOT ENGINE — used by FieldShell, CanvasNode, ChildNode, and
-// the live DynamicFormRenderer so every surface (builder canvas + published
-// form) resolves "full/half/third/quarter" identically.
 export function widthClass(width?: string) {
   switch (width) {
     case "half": 
@@ -57,7 +57,6 @@ export function widthClass(width?: string) {
   }
 }
 
-// 👑 TYPOGRAPHY CUSTOMIZER ENGINE HOOK
 function getTypographyClasses(node: FormComponentNode): string {
   const size = node.meta?.fontSize ?? "base";
   const weight = node.meta?.fontWeight ?? "normal";
@@ -86,11 +85,9 @@ export function FieldShell({ node, error, children }: { node: FormComponentNode;
   const isActionType = ["submit", "reset", "cancel", "previous", "next"].includes(node.type);
 
   return (
-    /* 🌟 FIXED: Removed widthClass completely from here. 
-       The parent CSS Grid handles widths via columns. This wrapper should simply occupy full space (w-full). */
     <div className={cn("space-y-1 w-full box-border flex-none", alignmentClass(node.display?.align), accentClass(node.display?.colorAccent))}>
       <div className="w-full flex flex-col">
-        {node.label && !isActionType && (
+        {node.label && !isActionType && (node.type as string) !== "inlineTemplate" && (
           <label className={cn("mb-1 flex items-center gap-1 text-xs font-medium text-ink dark:text-white/85 whitespace-nowrap",
             node.display?.align === "center" ? "justify-center text-center" : node.display?.align === "right" ? "justify-end text-right" : "justify-start text-left"
           )}>
@@ -102,7 +99,6 @@ export function FieldShell({ node, error, children }: { node: FormComponentNode;
         <div className={cn("w-full min-w-0 flex", 
           node.display?.align === "center" ? "justify-center" : node.display?.align === "right" ? "justify-end" : "justify-start"
         )}>
-          {/* 🌟 FIXED: Changed conditional width maps to default cleanly to w-full so inputs occupy the entire column span */}
           <div className="min-w-0 w-full">
             {children}
           </div>
@@ -167,7 +163,18 @@ function ReadOnlyValue({ node, value }: { node: FormComponentNode; value: any })
   if (value === undefined || value === null || value === "") {
     return <span className="text-xs italic text-ink-soft/40">Not provided</span>;
   }
-  switch (node.type) {
+  switch (node.type as string) {
+    // 🌟 MOUNT COMPONENT IN READ-ONLY STATIC SUMMARY SCREEN SUBMISSIONS
+    case "inlineTemplate":
+      return (
+        <InlineTemplateRenderer
+          node={node as any}
+          value={value || {}}
+          onChange={() => {}}
+          disabled={true}
+        />
+      );
+
     case "file": case "image": case "medicalImage":
       if (typeof value === "string" && (value.startsWith("http") || value.startsWith("data:image"))) {
         return (
@@ -305,18 +312,20 @@ export function FieldRenderer({ node, value, onChange, disabled, interactive = t
   const commonProps = { disabled: isDisabled, readOnly: node.validation?.readOnly, placeholder: node.placeholder };
 
   if (readOnlyView) {
-    if (["heading", "paragraph", "label", "divider", "htmlBlock", "spacer"].includes(node.type)) {
+    if (["heading", "paragraph", "label", "divider", "htmlBlock", "spacer", "imageDisplay"].includes(node.type)) {
       return (
         <FieldShell node={node} error={error}>
           {(() => {
+            // 🌟 PARSE HTML RICH STRINGS SECURELY ON STATIC VIEW RENDERS AS WELL
             switch (node.type) {
-              case "heading": return <h3 className={getTypographyClasses(node)}>{node.label}</h3>;
-              case "paragraph": return <p className={getTypographyClasses(node)}>{node.label}</p>;
-              case "label": return <span className={cn("uppercase tracking-wide", getTypographyClasses(node))}>{node.label}</span>;
+              case "heading": return <h3 className={getTypographyClasses(node)} dangerouslySetInnerHTML={{ __html: node.label ?? "" }} />;
+              case "paragraph": return <p className={getTypographyClasses(node)} dangerouslySetInnerHTML={{ __html: node.label ?? "" }} />;
+              case "label": return <span className={cn("uppercase tracking-wide", getTypographyClasses(node))} dangerouslySetInnerHTML={{ __html: node.label ?? "" }} />;
               case "divider": return <hr className="border-ink/10 dark:border-white/10 my-1" />;
               case "htmlBlock": return <div className="prose prose-sm max-w-none break-words overflow-x-auto" dangerouslySetInnerHTML={{ __html: (node.meta?.html as string) ?? "" }} />;
               case "imageDisplay": return <div className="rounded-xs border border-dashed border-ink/20 p-4 text-center text-xs text-ink-soft">Image placeholder</div>;
               case "spacer": return <div style={{ height: Math.min((node.meta?.heightPx as number) ?? 24, 48) }} />;
+              default: return null;
             }
           })()}
         </FieldShell>
@@ -338,7 +347,18 @@ export function FieldRenderer({ node, value, onChange, disabled, interactive = t
   }
 
   const body = (() => {
-    switch (node.type) {
+    switch (node.type as string) {
+      // 🌟 NEWLY ADDED: Map the inline template type directly to its custom flex sentence rendering window
+      case "inlineTemplate":
+        return (
+          <InlineTemplateRenderer
+            node={node as any}
+            value={(value as Record<string, any>) || {}}
+            onChange={(val) => interactive && onChange(val)}
+            disabled={isDisabled}
+          />
+        );
+
       case "text": case "email": case "password": case "phone": case "hidden":
         return <Input {...commonProps} type={node.type === "hidden" ? "text" : node.type} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)} className={node.type === "hidden" ? "hidden" : "w-full text-xs sm:text-sm"} />;
       case "number": return <Input {...commonProps} type="number" value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)} className="w-full text-xs sm:text-sm" />;
@@ -472,9 +492,10 @@ export function FieldRenderer({ node, value, onChange, disabled, interactive = t
       }
       case "signature": case "doctorSignature": case "patientSignature": return <SignaturePad disabled={isDisabled} value={value} onChange={onChange} />;
 
-      case "heading": return <h3 className={getTypographyClasses(node)}>{node.label}</h3>;
-      case "paragraph": return <p className={getTypographyClasses(node)}>{node.label}</p>;
-      case "label": return <span className={cn("uppercase tracking-wide w-full", getTypographyClasses(node))}>{node.label}</span>;
+      {/* 🌟 PARSE RICH STRINGS WITH INLINE STYLES FOR CORE THEMES */}
+      case "heading": return <h3 className={getTypographyClasses(node)} dangerouslySetInnerHTML={{ __html: node.label ?? "" }} />;
+      case "paragraph": return <p className={getTypographyClasses(node)} dangerouslySetInnerHTML={{ __html: node.label ?? "" }} />;
+      case "label": return <span className={cn("uppercase tracking-wide w-full", getTypographyClasses(node))} dangerouslySetInnerHTML={{ __html: node.label ?? "" }} />;
       case "divider": return <hr className="border-ink/10 dark:border-white/10 w-full my-0.5" />;
       case "htmlBlock": return <div className="prose prose-sm max-w-none break-words w-full overflow-x-auto" dangerouslySetInnerHTML={{ __html: (node.meta?.html as string) ?? "" }} />;
       case "imageDisplay": return <div className="rounded-xs border border-dashed border-ink/20 p-4 text-center text-xs text-ink-soft w-full">Static image placeholder</div>;

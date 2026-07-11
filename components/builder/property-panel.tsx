@@ -13,6 +13,11 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import type { FormComponentNode } from "@/lib/form-engine/types";
 
+// 🌟 Import the newly introduced Inline Template Builder Sidebar Controller Component
+import { InlineTemplatePanel } from "./inline-template-panel";
+// 🌟 Import the TipTap Rich Text Core Input Component
+import { RichTextInput } from "./rich-text-input";
+
 function findNode(nodes: FormComponentNode[], id: string): FormComponentNode | null {
   for (const n of nodes) {
     if (n.id === id) return n;
@@ -46,11 +51,14 @@ export function PropertyPanel() {
   const supports = def?.supports ?? {};
   const isLayout = isLayoutType(node.type);
   const isTypography = ["heading", "paragraph", "label"].includes(node.type);
+  // Separate variable to use custom editor only for paragraph and headings
+  const useRichTextEditor = ["heading", "paragraph"].includes(node.type);
 
   const patch = (p: Partial<FormComponentNode>) => updateComponent(node.id, p);
   const patchValidation = (p: Partial<FormComponentNode["validation"]>) => patch({ validation: { ...node.validation, ...p } });
   const patchDisplay = (p: Partial<FormComponentNode["display"]>) => patch({ display: { ...node.display, ...p } });
   const patchMeta = (p: Record<string, unknown>) => patch({ meta: { ...node.meta, ...p } });
+  const patchConfig = (config: unknown) => updateComponent(node.id, { config } as any);
 
   return (
     <aside className="thin-scroll flex h-full w-full shrink-0 flex-col overflow-y-auto border-l border-ink/10 bg-paper-dim dark:border-white/10 dark:bg-paper-darkdim md:w-80">
@@ -73,7 +81,15 @@ export function PropertyPanel() {
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label>{isTypography ? "Text Content" : "Field label"}</Label>
-                <Input value={node.label ?? ""} onChange={(e) => patch({ label: e.target.value })} />
+                {/* 🌟 CONDITIONALLY MOUNT THE RICH TEXT WYSIWYG EDITOR FOR HEADINGS/PARAGRAPHS */}
+                {useRichTextEditor ? (
+                  <RichTextInput 
+                    value={node.label ?? ""} 
+                    onChange={(html) => patch({ label: html })} 
+                  />
+                ) : (
+                  <Input value={node.label ?? ""} onChange={(e) => patch({ label: e.target.value })} />
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label>Internal name</Label>
@@ -92,16 +108,16 @@ export function PropertyPanel() {
                 </div>
               )}
               {node.type === "consent" && (
-      <div className="space-y-1.5">
-        <Label>Consent Description Text</Label>
-        <Textarea 
-          rows={3} 
-          value={node.description ?? ""} 
-          onChange={(e) => patch({ description: e.target.value })} 
-          placeholder="Enter the terms or acknowledgement text the user must check..."
-        />
-      </div>
-    )}
+                <div className="space-y-1.5">
+                  <Label>Consent Description Text</Label>
+                  <Textarea 
+                    rows={3} 
+                    value={node.description ?? ""} 
+                    onChange={(e) => patch({ description: e.target.value })} 
+                    placeholder="Enter the terms or acknowledgement text the user must check..."
+                  />
+                </div>
+              )}
               {supports.orientation && (
                 <div className="space-y-1.5">
                   <Label>Orientation</Label>
@@ -147,6 +163,14 @@ export function PropertyPanel() {
                   </Button>
                 </div>
               )}
+
+             {/* 🌟 FIXED: Add type casting "as any" to satisfy the TypeScript compiler */}
+{(node.type as string) === "inlineTemplate" && (
+  <InlineTemplatePanel
+    node={node as any}
+    onUpdate={(config) => patch({ config } as any)}
+  />
+)}
             </div>
           </TabsContent>
 
@@ -154,18 +178,15 @@ export function PropertyPanel() {
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Width Slot</Label>
-            
-
-  <Select value={node.display?.width ?? "full"} onChange={(e) => patchDisplay({ width: e.target.value as any })}>
-    <option value="full">Full width (100%)</option>
-    <option value="three-quarters">Three-Quarters (75%)</option> {/* 🌟 Added */}
-    <option value="two-thirds">Two-Thirds (66.6%)</option>      {/* 🌟 Added */}
-    <option value="half">Half width (50%)</option>
-    <option value="third">Third width (33.3%)</option>
-    <option value="quarter">Quarter width (25%)</option>
-    <option value="sixth">Sixth width (16.6%)</option>
-  </Select>
-
+                <Select value={node.display?.width ?? "full"} onChange={(e) => patchDisplay({ width: e.target.value as any })}>
+                  <option value="full">Full width (100%)</option>
+                  <option value="three-quarters">Three-Quarters (75%)</option>
+                  <option value="two-thirds">Two-Thirds (66.6%)</option>
+                  <option value="half">Half width (50%)</option>
+                  <option value="third">Third width (33.3%)</option>
+                  <option value="quarter">Quarter width (25%)</option>
+                  <option value="sixth">Sixth width (16.6%)</option>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Alignment</Label>

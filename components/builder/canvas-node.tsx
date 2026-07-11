@@ -35,7 +35,6 @@ export function CanvasNode({
 
   const isSelected = selectedId === node.id;
   
-  // Convert standard sorting handlers into absolute draggable targets
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: node.id });
 
   const wrapperRef = React.useRef<HTMLDivElement>(null);
@@ -125,7 +124,20 @@ export function CanvasNode({
           </div>
         ) : (
           <div className="w-full h-full pointer-events-none select-none">
-            <FieldRenderer node={node} value={undefined} onChange={() => {}} interactive={false} />
+            {/* 🌟 FIXED: Parse HTML using dangerouslySetInnerHTML specifically if running custom rich text typography nodes */}
+          {["heading", "paragraph"].includes(node.type) ? (
+  <div 
+    className={cn(
+      "max-w-none text-ink dark:text-white break-words w-full",
+      "prose prose-sm dark:prose-invert",
+      "list-[disc] list-inside ml-4 my-2", // 👈 FORCES VISIBLE DISC DOTS
+      "prose-h1:text-xl prose-h1:font-bold prose-h2:text-lg prose-h2:font-semibold"
+    )}
+    dangerouslySetInnerHTML={{ __html: node.label ?? "" }} 
+  />
+): (
+              <FieldRenderer node={node} value={undefined} onChange={() => {}} interactive={false} />
+            )}
           </div>
         )}
 

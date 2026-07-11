@@ -26,8 +26,8 @@ export interface FieldDefinition {
 function base(
   type: FieldType,
   label: string,
-  overrides: Partial<FormComponentNode> = {}
-): FormComponentNode {
+  overrides: Partial<FormComponentNode> & Record<string, unknown> = {}
+): FormComponentNode & Record<string, unknown> {
   return {
     id: nanoid(10),
     type,
@@ -75,7 +75,15 @@ const registryList: FieldDefinition[] = [
   { type: "divider", category: "display", label: "Divider", icon: "Minus", description: "Horizontal rule", supports: {}, createNode: () => base("divider", "") },
   { type: "htmlBlock", category: "display", label: "HTML Block", icon: "Code2", description: "Rich static content block", supports: {}, createNode: () => base("htmlBlock", "", { meta: { html: "<p>Custom content</p>" } }) },
   { type: "imageDisplay", category: "display", label: "Image", icon: "Image", description: "Static image", supports: {}, createNode: () => base("imageDisplay", "") },
-
+  { 
+    type: "inlineTemplate" as any, 
+    category: "display", 
+    label: "Inline template", 
+    icon: "Layers", 
+    description: "Sentence with dynamic inline blanks or lists", 
+    supports: {}, 
+    createNode: () => base("inlineTemplate" as any, "Sentence Template Context", { config: { tokens: [] } }) 
+  },
   // ---------------- LAYOUT ----------------
   { type: "section", category: "layout", label: "Section", icon: "Rows3", description: "Collapsible grouping container", supports: { isLayout: true }, createNode: () => base("section", "New Section", { children: [] }) },
   { type: "card", category: "layout", label: "Card", icon: "CreditCard", description: "Bordered card container", supports: { isLayout: true }, createNode: () => base("card", "Card", { children: [] }) },
@@ -105,6 +113,9 @@ const registryList: FieldDefinition[] = [
   { type: "consent", category: "healthcare", label: "Consent", icon: "FileCheck2", description: "Consent statement with acknowledgement", supports: {}, createNode: () => base("consent", "Consent Statement") },
   { type: "doctorSignature", category: "healthcare", label: "Doctor Signature", icon: "Signature", description: "Physician signature capture", supports: {}, createNode: () => base("doctorSignature", "Doctor Signature") },
   { type: "patientSignature", category: "healthcare", label: "Patient Signature", icon: "Signature", description: "Patient signature capture", supports: {}, createNode: () => base("patientSignature", "Patient Signature") },
+  
+  // 🌟 NEWLY ADDED: Inline Smart Template Field Mapping Config
+
 ];
 
 export const FIELD_REGISTRY: Record<FieldType, FieldDefinition> = Object.fromEntries(

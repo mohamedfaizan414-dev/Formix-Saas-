@@ -12,50 +12,69 @@ const createPatientSchema = z.object({
   organizationId: z.string().optional(),
 });
 
+const assignFormSchema = z.object({
+  patientId: z.string().min(1),
+  formId: z.string().optional(),
+  formIds: z.array(z.string().min(1)).optional(),
+}).refine((data) => !!data.formId || (data.formIds && data.formIds.length > 0), {
+  message: "Either formId or formIds must be provided.",
+  path: ["formId", "formIds"],
+});
+
 export async function POST(req: Request) {
   try {
+    // 1. Authentication Layer Guardrail
     const session = await getSession();
-    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session) {
+      return NextResponse.json({ error: "Unauthenticated dynamic action call." }, { status: 401 });
+    }
 
     const { searchParams } = new URL(req.url);
-    const action = searchParams.get("action"); // 🌟 Read the query parameter action label
-
+    const action = searchParams.get("action");
     const body = await req.json().catch(() => null);
 
-    // 🌟 ROUTINE 1: HANDLE FORM ASSIGNMENT DISPATCH
-    if (action === "assign") {
-      if (!body?.patientId || !body?.formId) {
-        return NextResponse.json({ error: "Missing patientId or formId attributes." }, { status: 400 });
-      }
-
-      const assignment = await PatientService.assignForm(body.patientId, body.formId, {
-        id: session.sub ?? (session as any).id,
-        role: session.role,
-        organizationId: session.hospitalId ?? null,
-      });
-
-      return NextResponse.json({ assignment }, { status: 201 });
-    }
-
-    // 🌟 ROUTINE 2: HANDLE NEW PATIENT CREATION (Your existing code)
-    const parsed = createPatientSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
-    }
-
-    const patient = await PatientService.createPatient(parsed.data, {
+    // Context hydration payload mapping
+    const userCtx = {
       id: session.sub ?? (session as any).id,
       role: session.role,
       organizationId: session.hospitalId ?? null,
-    });
+    };
+// 🌟 ROUTINE 1: HANDLE FORM ASSIGNMENT DISPATCH
+    if (action === "assign") {
+      const parsedAssign = assignFormSchema.safeParse(body);
+      if (!parsedAssign.success) {
+        return NextResponse.json({ 
+          error: parsedAssign.error.issues[0]?.message ?? "Invalid validation criteria payload." 
+        }, { status: 400 });
+      }
 
-    return NextResponse.json({ patient }, { status: 201 });
+      const { patientId, formId, formIds } = parsedAssign.data;
+      
+      // Normalize single value inputs or arrays into a clean stream array layout
+      const targetedFormIds = formIds && formIds.length > 0 ? formIds : [formId!];
+
+      // 🌟 FIXED: Execute operations concurrently using Promise.all WITHOUT a transaction block.
+      // This frees the database instantly and handles email dispatches safely in the background.
+      const assignmentBatchResult = await Promise.all(
+        targetedFormIds.map((targetFormId) => 
+          PatientService.assignForm(patientId, targetFormId, userCtx)
+        )
+      );
+
+      return NextResponse.json({ 
+        success: true, 
+        count: assignmentBatchResult.length 
+      }, { status: 201 });
+    }
+
   } catch (err: any) {
-    console.error("POST operational path breakdown:", err);
-    return NextResponse.json({ error: err.message ?? "Failed to complete transaction processing." }, { status: 400 });
+    // 3. Centralized Runtime Exception Logging
+    console.error("Critical transaction breakdown at POST operational route:", err);
+    return NextResponse.json({ 
+      error: err.message ?? "Internal database mutation transaction error." 
+    }, { status: 500 });
   }
 }
-
 
 
 // Keep your existing POST method completely intact here...
