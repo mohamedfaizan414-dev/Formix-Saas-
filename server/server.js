@@ -56,6 +56,10 @@ resolveMongoSrv(process.env.DATABASE_URL).then((resolvedUrl) => {
     res.json({ message: "Formix Clinical API Server Running" });
   });
 
+  app.get("/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date() });
+  });
+
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
