@@ -19,6 +19,7 @@ import AuditLogsPage from "./pages/AuditLogs";
 import FillFormPage from "./pages/FillForm";
 import PreviewPage from "./pages/FormPreview";
 import PublicFormFillPage from "./pages/PublicFormFill";
+import NotFoundPage from "./pages/NotFound";
 
 import { Toaster } from "sonner";
 
@@ -50,7 +51,7 @@ function App() {
           <Route path="/admin/audit-logs" element={<AuditLogsPage />} />
 
           {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
         <Toaster richColors position="top-right" />
       </AuthProvider>

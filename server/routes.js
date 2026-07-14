@@ -124,18 +124,19 @@ router.post("/api/auth/login", async (req, res) => {
     ipAddress: ip,
   });
 
+  const isProd = process.env.NODE_ENV === "production";
   res.cookie(ACCESS_COOKIE_NAME, accessToken, {
     httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,
     path: "/",
     maxAge: 1000 * 60 * 15, // 15 mins
   });
 
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
     httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,
     path: "/",
     maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
   });
@@ -154,8 +155,17 @@ router.post("/api/auth/login", async (req, res) => {
 
 // POST /api/auth/logout
 router.post("/api/auth/logout", (req, res) => {
-  res.clearCookie(ACCESS_COOKIE_NAME, { path: "/" });
-  res.clearCookie(REFRESH_COOKIE_NAME, { path: "/" });
+  const isProd = process.env.NODE_ENV === "production";
+  res.clearCookie(ACCESS_COOKIE_NAME, {
+    path: "/",
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,
+  });
+  res.clearCookie(REFRESH_COOKIE_NAME, {
+    path: "/",
+    sameSite: isProd ? "none" : "lax",
+    secure: isProd,
+  });
   return res.json({ ok: true });
 });
 
@@ -214,10 +224,11 @@ router.post("/api/auth/refresh", async (req, res) => {
       email: user.email,
     });
 
+    const isProd = process.env.NODE_ENV === "production";
     res.cookie(ACCESS_COOKIE_NAME, accessToken, {
       httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      sameSite: isProd ? "none" : "lax",
+      secure: isProd,
       path: "/",
       maxAge: 1000 * 60 * 15,
     });
