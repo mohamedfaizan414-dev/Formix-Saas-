@@ -32,7 +32,27 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    
+    const allowed = [
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+      process.env.CLIENT_URL
+    ].filter(Boolean);
+
+    const isExplicitlyAllowed = allowed.some(
+      a => a.replace(/\/$/, "").toLowerCase() === origin.replace(/\/$/, "").toLowerCase()
+    );
+
+    const isFormixVercel = origin.startsWith("https://formix-") && origin.endsWith(".vercel.app");
+
+    if (isExplicitlyAllowed || isFormixVercel) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
   credentials: true,
 }));
 
