@@ -36,9 +36,10 @@ app.use(cors({
     if (!origin) return callback(null, true);
     
     const allowed = [
+       process.env.CLIENT_URL,
       "http://localhost:5173",
-      "http://127.0.0.1:5173",
-      process.env.CLIENT_URL
+      "http://127.0.0.1:5173"
+     
     ].filter(Boolean);
 
     const isExplicitlyAllowed = allowed.some(
