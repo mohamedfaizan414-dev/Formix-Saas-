@@ -14,21 +14,48 @@ function resolveMongoSrv(connectionString) {
       }
 
       const [_, user, pass, host, db, query] = match;
-      const resolver = new dns.Resolver();
-      resolver.setServers(["8.8.8.8", "8.8.4.4"]); // Resolve SRV records via Google DNS
-
       const srvDomain = `_mongodb._tcp.${host}`;
-      resolver.resolveSrv(srvDomain, (srvErr, srvAddresses) => {
-        if (srvErr) {
-          console.warn("[DNS Resolver] Custom SRV lookup failed, falling back to OS DNS:", srvErr.message);
-          return resolve(connectionString);
+
+      // Helper function to resolve using a given resolver/dns module
+      const tryResolve = (dnsModule, callback) => {
+        dnsModule.resolveSrv(srvDomain, (srvErr, srvAddresses) => {
+          if (srvErr || !srvAddresses || srvAddresses.length === 0) {
+            return callback(srvErr || new Error("No SRV records"));
+          }
+          dnsModule.resolveTxt(host, (txtErr, txtRecords) => {
+            callback(null, { srvAddresses, txtRecords: txtErr ? null : txtRecords });
+          });
+        });
+      };
+
+      // 1. Try standard OS DNS first
+      tryResolve(dns, (err, result) => {
+        if (!err) {
+          console.log("[DNS Resolver] Programmatically resolved MongoDB Atlas SRV using System DNS.");
+          return handleResult(result);
         }
 
-        if (!srvAddresses || srvAddresses.length === 0) {
-          return resolve(connectionString);
+        // 2. Fallback to Google DNS resolver
+        console.warn("[DNS Resolver] System DNS resolution failed, attempting Google DNS fallback...");
+        const googleResolver = new dns.Resolver();
+        try {
+          googleResolver.setServers(["8.8.8.8", "8.8.4.4"]);
+          tryResolve(googleResolver, (gErr, gResult) => {
+            if (!gErr) {
+              console.log("[DNS Resolver] Programmatically resolved MongoDB Atlas SRV using Google DNS.");
+              return handleResult(gResult);
+            }
+            console.error("[DNS Resolver] Both System and Google DNS failed. Falling back to original connection string.");
+            resolve(connectionString);
+          });
+        } catch (gSetupErr) {
+          console.error("[DNS Resolver] Google DNS setup error. Falling back to original connection string.");
+          resolve(connectionString);
         }
+      });
 
-        // map names and remove any trailing dot that Node resolvesrv returns
+      function handleResult(result) {
+        const { srvAddresses, txtRecords } = result;
         const hosts = srvAddresses
           .map(addr => {
             let name = addr.name;
@@ -36,38 +63,31 @@ function resolveMongoSrv(connectionString) {
             return `${name}:${addr.port}`;
           })
           .join(",");
-        
-        resolver.resolveTxt(host, (txtErr, txtRecords) => {
-          const params = new URLSearchParams();
-          
-          // Set default connection options
-          params.set("ssl", "true");
-          params.set("authSource", "admin");
 
-          // Merge params from TXT records
-          if (!txtErr && txtRecords) {
-            const txtParamsString = txtRecords.flat().join("&");
-            if (txtParamsString) {
-              const txtParams = new URLSearchParams(txtParamsString);
-              for (const [key, val] of txtParams.entries()) {
-                params.set(key, val);
-              }
-            }
-          }
+        const params = new URLSearchParams();
+        params.set("ssl", "true");
+        params.set("authSource", "admin");
 
-          // Merge params from original query string
-          if (query && query.startsWith("?")) {
-            const queryParams = new URLSearchParams(query.substring(1));
-            for (const [key, val] of queryParams.entries()) {
+        if (txtRecords) {
+          const txtParamsString = txtRecords.flat().join("&");
+          if (txtParamsString) {
+            const txtParams = new URLSearchParams(txtParamsString);
+            for (const [key, val] of txtParams.entries()) {
               params.set(key, val);
             }
           }
+        }
 
-          const resolvedUrl = `mongodb://${user}:${pass}@${hosts}/${db}?${params.toString()}`;
-          console.log("[DNS Resolver] Programmatically resolved MongoDB Atlas SRV to standard nodes format.");
-          resolve(resolvedUrl);
-        });
-      });
+        if (query && query.startsWith("?")) {
+          const queryParams = new URLSearchParams(query.substring(1));
+          for (const [key, val] of queryParams.entries()) {
+            params.set(key, val);
+          }
+        }
+
+        const resolvedUrl = `mongodb://${user}:${pass}@${hosts}/${db}?${params.toString()}`;
+        resolve(resolvedUrl);
+      }
     } catch (err) {
       console.warn("[DNS Resolver] Parsing error:", err.message);
       resolve(connectionString);

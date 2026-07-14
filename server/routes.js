@@ -30,9 +30,45 @@ const ROLE_DASHBOARD_PATH = {
   RECEPTIONIST: "/dashboard",
 };
 
-// ==========================================
-// 1. AUTH ROUTES
-// ==========================================
+// GET /api/debug-db
+router.get("/api/debug-db", async (req, res) => {
+  const rawUrl = process.env.DATABASE_URL || "";
+  const maskPassword = (str) => {
+    try {
+      const match = str.match(/mongodb(?:\+srv)?:\/\/([^:]+):([^@]+)@(.*)/);
+      if (match) {
+        return `mongodb+srv://${match[1]}:******@${match[3]}`;
+      }
+      return str;
+    } catch {
+      return "[masked]";
+    }
+  };
+
+  const info = {
+    envDatabaseUrlMasked: maskPassword(rawUrl),
+    nodeEnv: process.env.NODE_ENV,
+    resolvedUrlMasked: maskPassword(process.env.DATABASE_URL),
+  };
+
+  try {
+    const count = await prisma.user.count();
+    return res.json({
+      status: "success",
+      message: "Database connection verified successfully",
+      userCount: count,
+      info,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      status: "error",
+      message: "Database connection failed",
+      errorMessage: err.message,
+      errorStack: err.stack,
+      info,
+    });
+  }
+});
 
 // POST /api/auth/login
 router.post("/api/auth/login", async (req, res) => {
